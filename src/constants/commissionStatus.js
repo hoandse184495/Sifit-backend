@@ -1,0 +1,5 @@
+module.exports = {
+  PENDING: 'PENDING',
+  RECOGNIZED: 'RECOGNIZED',
+  REVERSED: 'REVERSED',
+};

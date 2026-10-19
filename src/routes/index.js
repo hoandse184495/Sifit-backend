@@ -1,0 +1,68 @@
+const express = require('express');
+const adminFinanceRoutes = require('./adminFinance.routes');
+const adminDashboardRoutes = require('./adminDashboard.routes');
+const adminOrderRoutes = require('./adminOrder.routes');
+const adminProductRoutes = require('./adminProduct.routes');
+const adminReportRoutes = require('./adminReport.routes');
+const adminReviewRoutes = require('./adminReview.routes');
+const adminUserRoutes = require('./adminUser.routes');
+const authRoutes = require('./auth.routes');
+const cartRoutes = require('./cart.routes');
+const categoryRoutes = require('./category.routes');
+const addressRoutes = require('./address.routes');
+const conversationRoutes = require('./conversation.routes');
+const disputeRoutes = require('./dispute.routes');
+const healthRoutes = require('./health.routes');
+const messageModerationRoutes = require('./messageModeration.routes');
+const notificationRoutes = require('./notification.routes');
+const orderRoutes = require('./order.routes');
+const paymentRoutes = require('./payment.routes');
+const paymentWebhookRoutes = require('./paymentWebhook.routes');
+const productReviewRoutes = require('./productReview.routes');
+const productRoutes = require('./product.routes');
+const sellerFinanceRoutes = require('./sellerFinance.routes');
+const sellerOrderRoutes = require('./sellerOrder.routes');
+const sellerProfileRoutes = require('./sellerProfile.routes');
+const sellerRatingRoutes = require('./sellerRating.routes');
+const sellerVerificationRoutes = require('./sellerVerification.routes');
+const shippingRoutes = require('./shipping.routes');
+const wishlistRoutes = require('./wishlist.routes');
+
+const router = express.Router();
+const authenticate = require('../middlewares/auth.middleware');
+const authorize = require('../middlewares/authorize.middleware');
+const roles = require('../constants/roles');
+
+// All seller endpoints, including those mounted by shared routers below.
+router.use('/seller', authenticate, authorize(roles.SELLER));
+
+router.use('/admin', adminFinanceRoutes);
+router.use('/admin', adminDashboardRoutes);
+router.use('/admin', adminOrderRoutes);
+router.use('/admin', adminProductRoutes);
+router.use('/admin', adminReportRoutes);
+router.use('/admin', adminReviewRoutes);
+router.use('/admin', adminUserRoutes);
+router.use('/auth', authRoutes);
+router.use('/addresses', addressRoutes);
+router.use('/cart', cartRoutes);
+router.use('/categories', categoryRoutes);
+router.use('/conversations', conversationRoutes);
+router.use('/health', healthRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/orders', orderRoutes);
+router.use('/payments', paymentRoutes);
+router.use('/', productReviewRoutes);
+router.use('/products', productRoutes);
+router.use('/seller', sellerFinanceRoutes);
+router.use('/seller', sellerOrderRoutes);
+router.use('/', sellerRatingRoutes);
+router.use('/', messageModerationRoutes);
+router.use('/', disputeRoutes);
+router.use('/', sellerProfileRoutes);
+router.use('/', sellerVerificationRoutes);
+router.use('/', shippingRoutes);
+router.use('/wishlist', wishlistRoutes);
+router.use('/webhooks', paymentWebhookRoutes);
+
+module.exports = router;
