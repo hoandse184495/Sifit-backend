@@ -22,6 +22,7 @@ const paginate = async (model, query, { page = 1, limit = 20 }) => {
 
 const listPayments = asyncHandler(async (req, res) => {
   const query = req.query.status ? { status: req.query.status } : {};
+  if (req.query.checkoutGroupId) query.checkoutGroupId = req.query.checkoutGroupId;
   const result = await paginate(Payment, query, req.query);
   const response = new ApiResponse(httpStatus.OK, result, 'Payments retrieved');
   res.status(response.statusCode).json(response);

@@ -14,7 +14,7 @@ const findReviewLike = async (id) => {
 
 const moderate = async ({ id, admin, action, reason }) => {
   const { doc, type } = await findReviewLike(id);
-  if (action === 'restore' && doc.status === 'REMOVED') {
+  if (doc.status === 'REMOVED') {
     throw new ApiError(
       httpStatus.CONFLICT,
       'Author-removed review cannot be restored by moderation',

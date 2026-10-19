@@ -69,9 +69,11 @@ class SimulatorProvider extends PaymentProviderInterface {
     return { status: 'PENDING' };
   }
 
-  async refundPayment({ payment, amount }) {
+  async refundPayment({ payment, amount, idempotencyKey }) {
     return {
-      providerRefundId: `sim_ref_${crypto.randomUUID()}`,
+      providerRefundId: idempotencyKey
+        ? `sim_ref_${crypto.createHash('sha256').update(`${payment._id}:${idempotencyKey}`).digest('hex')}`
+        : `sim_ref_${crypto.randomUUID()}`,
       status: 'PENDING',
       amount,
       currency: payment.currency,

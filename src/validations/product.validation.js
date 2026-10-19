@@ -1,3 +1,4 @@
+const applyValidatedQuery = require('../utils/applyValidatedQuery');
 const { z } = require('zod');
 const { productConditions, productSizes } = require('../models/product.model');
 
@@ -6,6 +7,14 @@ const paginationQuery = {
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 };
+const jsonList = (schema) => z.string().transform((value, ctx) => {
+  try {
+    const parsed = z.array(schema).max(50).safeParse(JSON.parse(value));
+    if (parsed.success) return parsed.data;
+  } catch (_error) { /* Invalid JSON is handled by the validation issue below. */ }
+  ctx.addIssue({ code: 'custom', message: 'Expected a JSON array of valid filter values' });
+  return z.NEVER;
+}).optional();
 
 const productBody = z.object({
   title: z.string().trim().min(5).max(150),
@@ -39,6 +48,11 @@ const listProductsSchema = z.object({
     condition: z.enum(productConditions).optional(),
     size: z.enum(productSizes).optional(),
     brand: z.string().trim().max(100).optional(),
+    categoryIds: jsonList(objectId),
+    brands: jsonList(z.string().trim().min(1).max(100)),
+    sizes: jsonList(z.enum(productSizes)),
+    conditions: jsonList(z.enum(productConditions)),
+    material: z.string().trim().max(100).optional(),
     minPrice: z.coerce.number().int().min(0).optional(),
     maxPrice: z.coerce.number().int().min(0).optional(),
     sort: z.enum(['newest', 'oldest', 'price_asc', 'price_desc']).default('newest'),
@@ -78,7 +92,7 @@ const validate = (schema) => (req, res, next) => {
 
   req.body = parsed.data.body || req.body;
   req.params = parsed.data.params || req.params;
-  req.query = parsed.data.query || req.query;
+  applyValidatedQuery(req, parsed.data.query);
   return next();
 };
 

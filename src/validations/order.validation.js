@@ -1,3 +1,4 @@
+const applyValidatedQuery = require('../utils/applyValidatedQuery');
 const { z } = require('zod');
 const orderStatus = require('../constants/orderStatus');
 
@@ -63,7 +64,7 @@ const validate = (schema) => (req, res, next) => {
 
   req.body = parsed.data.body || req.body;
   req.params = parsed.data.params || req.params;
-  req.query = parsed.data.query || req.query;
+  applyValidatedQuery(req, parsed.data.query);
   return next();
 };
 

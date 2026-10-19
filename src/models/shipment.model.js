@@ -53,6 +53,12 @@ const shipmentSchema = new mongoose.Schema(
     deliveredAt: Date,
     failedAt: Date,
     cancelledAt: Date,
+    deliveryReviews: [{
+      status: { type: String, enum: ['DELIVERED', 'DELIVERY_FAILED'] },
+      reason: String,
+      adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      reviewedAt: { type: Date, default: Date.now },
+    }],
   },
   { timestamps: true },
 );

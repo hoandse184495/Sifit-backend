@@ -8,29 +8,30 @@ const { getPaymentProvider } = require('./paymentProviders/paymentProvider.facto
 const ledgerService = require('./ledger.service');
 
 const requestRefund = async ({ paymentId, amount, idempotencyKey, reason }) => {
-  const payment = await Payment.findById(paymentId);
-
-  if (!payment || payment.status !== paymentAttemptStatus.SUCCEEDED) {
-    throw new ApiError(httpStatus.CONFLICT, 'Only successful payments can be refunded');
-  }
-
-  const refundedAmount = payment.refundedAmount || 0;
-
-  if (amount > payment.amount - refundedAmount) {
-    throw new ApiError(httpStatus.CONFLICT, 'Refund amount exceeds refundable amount');
-  }
-
-  const existing = await Refund.findOne({ paymentId, idempotencyKey });
-  if (existing) return existing;
-
   const session = await mongoose.startSession();
 
   try {
     let refund;
 
     await session.withTransaction(async () => {
+      const existing = await Refund.findOne({ paymentId, idempotencyKey }).session(session);
+      if (existing) {
+        if (existing.amount !== amount || (existing.reason || '') !== (reason || '')) {
+          throw new ApiError(httpStatus.CONFLICT, 'Idempotency key was used for a different refund');
+        }
+        refund = existing;
+        return;
+      }
+      const payment = await Payment.findById(paymentId).session(session);
+      if (!payment || ![paymentAttemptStatus.SUCCEEDED, paymentAttemptStatus.PARTIALLY_REFUNDED].includes(payment.status)) {
+        throw new ApiError(httpStatus.CONFLICT, 'Only successful payments can be refunded');
+      }
+      const refundedAmount = payment.refundedAmount || 0;
+      if (amount > payment.amount - refundedAmount) {
+        throw new ApiError(httpStatus.CONFLICT, 'Refund amount exceeds refundable amount');
+      }
       const provider = getPaymentProvider(payment.provider);
-      const providerRefund = await provider.refundPayment({ payment, amount });
+      const providerRefund = await provider.refundPayment({ payment, amount, idempotencyKey });
       const refunds = await Refund.create(
         [
           {

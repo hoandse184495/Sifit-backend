@@ -24,7 +24,7 @@ const getSort = (sort) => {
     price_desc: { price: -1 },
   };
 
-  return sorts[sort] || sorts.newest;
+  return { ...(sorts[sort] || sorts.newest), _id: sort === 'oldest' ? 1 : -1 };
 };
 
 const toPaginatedResponse = async ({ query, page, limit, sort, populate }) => {
@@ -64,6 +64,11 @@ const buildPublicQuery = (filters) => {
   if (filters.condition) query.condition = filters.condition;
   if (filters.size) query.size = filters.size;
   if (filters.brand) query.brand = new RegExp(`^${escapeRegex(filters.brand)}$`, 'i');
+  if (filters.categoryIds?.length) query.categoryId = { $in: filters.categoryIds };
+  if (filters.conditions?.length) query.condition = { $in: filters.conditions };
+  if (filters.sizes?.length) query.size = { $in: filters.sizes };
+  if (filters.brands?.length) query.brand = { $in: filters.brands.map(brand => new RegExp(`^${escapeRegex(brand)}$`, 'i')) };
+  if (filters.material) query.description = new RegExp(escapeRegex(filters.material), 'i');
 
   if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
     query.price = {};

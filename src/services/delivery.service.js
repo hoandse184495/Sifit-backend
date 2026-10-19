@@ -74,6 +74,14 @@ const reviewDelivery = async ({ shipmentId, admin, status, reason }) => {
     await session.withTransaction(async () => {
       shipment = await Shipment.findById(shipmentId).session(session);
       if (!shipment) throw new ApiError(httpStatus.NOT_FOUND, 'Shipment not found');
+      if (['DELIVERED', 'RETURNING', 'RETURNED', 'CANCELLED'].includes(shipment.status)) {
+        throw new ApiError(httpStatus.CONFLICT, 'Shipment can no longer be reviewed');
+      }
+      const order = await Order.findById(shipment.orderId).session(session);
+      if (!order || order.paymentStatus !== paymentStatus.PAID ||
+        ![orderStatus.PAID, orderStatus.PROCESSING, orderStatus.SHIPPED].includes(order.orderStatus)) {
+        throw new ApiError(httpStatus.CONFLICT, 'Order is not eligible for delivery review');
+      }
       if (status === 'DELIVERED') {
         shipment = await markDelivered({ shipmentId, deliveredAt: new Date(), session });
       } else {
@@ -81,7 +89,8 @@ const reviewDelivery = async ({ shipmentId, admin, status, reason }) => {
         shipment.failedAt = new Date();
         await shipment.save({ session });
       }
-      shipment._reviewReason = reason;
+      shipment.deliveryReviews.push({ status, reason, adminId: admin._id, reviewedAt: new Date() });
+      await shipment.save({ session });
     });
     return shipment;
   } finally {
