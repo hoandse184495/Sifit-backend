@@ -24,6 +24,7 @@ const SimulatorPaymentProvider = require('../src/services/paymentProviders/simul
 const SimulatorShippingProvider = require('../src/services/shippingProviders/simulator.provider');
 const deliveryService = require('../src/services/delivery.service');
 const settlementEligibilityService = require('../src/services/settlementEligibility.service');
+const { removeAddressDistrict } = require('../scripts/removeAddressDistrict');
 
 let replSet;
 let category;
@@ -33,7 +34,6 @@ const shippingAddress = {
   phone: '0901234567',
   addressLine: '123 Nguyen Trai',
   ward: 'Ben Thanh',
-  district: 'District 1',
   city: 'Ho Chi Minh City',
 };
 
@@ -43,7 +43,6 @@ const addressBody = {
   phone: '0901234567',
   addressLine: '45 Le Loi',
   ward: 'Ben Nghe',
-  district: 'District 1',
   province: 'Ho Chi Minh City',
   addressType: 'PICKUP',
   isDefault: true,
@@ -175,6 +174,35 @@ beforeEach(async () => {
 });
 
 describe('Seller profiles and addresses', () => {
+  it('removes legacy districts without changing other address fields and can be rerun', async () => {
+    const addressId = new mongoose.Types.ObjectId();
+    const orderId = new mongoose.Types.ObjectId();
+    const shipmentId = new mongoose.Types.ObjectId();
+    const legacyAddress = { ...addressBody, district: 'Legacy district' };
+    await Address.collection.insertOne({ _id: addressId, ...legacyAddress });
+    await Order.collection.insertOne({ _id: orderId, shippingAddress: { ...shippingAddress, district: 'Legacy district' } });
+    await Shipment.collection.insertOne({
+      _id: shipmentId,
+      pickupAddressSnapshot: legacyAddress,
+      deliveryAddressSnapshot: legacyAddress,
+    });
+    const preview = await removeAddressDistrict();
+    expect(preview.collections.map((item) => item.matched)).toEqual([1, 1, 1]);
+    expect((await Address.collection.findOne({ _id: addressId })).district).toBe('Legacy district');
+    const result = await removeAddressDistrict({ apply: true });
+    expect(result.collections.map((item) => item.remaining)).toEqual([0, 0, 0]);
+    const address = await Address.collection.findOne({ _id: addressId });
+    expect(address).toMatchObject(addressBody);
+    expect(address).not.toHaveProperty('district');
+    const order = await Order.collection.findOne({ _id: orderId });
+    expect(order.shippingAddress).toEqual(shippingAddress);
+    const shipment = await Shipment.collection.findOne({ _id: shipmentId });
+    expect(shipment.pickupAddressSnapshot).toEqual(addressBody);
+    expect(shipment.deliveryAddressSnapshot).toEqual(addressBody);
+    const repeated = await removeAddressDistrict({ apply: true });
+    expect(repeated.collections.map((item) => item.modified)).toEqual([0, 0, 0]);
+  });
+
   it('creates, prevents duplicates, updates, and exposes public shop safely', async () => {
     const seller = await registerAndLogin('seller@example.com', roles.SELLER);
     await request(app)
@@ -234,6 +262,20 @@ describe('Seller profiles and addresses', () => {
       .set('Authorization', `Bearer ${user.accessToken}`)
       .send({ ...addressBody, label: 'Warehouse', addressLine: '99 Dong Khoi' })
       .expect(201);
+    expect(first.body.data.address.addressType).toBe('SHIPPING');
+    const seller = await registerAndLogin('pickup-seller@example.com', roles.SELLER);
+    const pickup = await request(app)
+      .post('/api/v1/addresses')
+      .set('Authorization', `Bearer ${seller.accessToken}`)
+      .send({ ...addressBody, addressType: 'SHIPPING' })
+      .expect(201);
+    expect(pickup.body.data.address.addressType).toBe('PICKUP');
+    const updated = await request(app)
+      .patch(`/api/v1/addresses/${second.body.data.address._id}`)
+      .set('Authorization', `Bearer ${user.accessToken}`)
+      .send({ addressType: 'PICKUP' })
+      .expect(200);
+    expect(updated.body.data.address.addressType).toBe('SHIPPING');
     await request(app)
       .patch(`/api/v1/addresses/${second.body.data.address._id}/default`)
       .set('Authorization', `Bearer ${user.accessToken}`)

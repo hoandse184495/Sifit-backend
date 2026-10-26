@@ -40,7 +40,6 @@ const shippingAddressSchema = new mongoose.Schema(
     phone: { type: String, required: true, trim: true },
     addressLine: { type: String, required: true, trim: true },
     ward: { type: String, required: true, trim: true },
-    district: { type: String, required: true, trim: true },
     city: { type: String, required: true, trim: true },
     postalCode: { type: String, trim: true },
     notes: { type: String, trim: true },

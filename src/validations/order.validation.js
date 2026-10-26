@@ -20,7 +20,6 @@ const shippingAddressSchema = z.object({
   phone: z.string().trim().min(8).max(20),
   addressLine: z.string().trim().min(1).max(255),
   ward: z.string().trim().min(1).max(100),
-  district: z.string().trim().min(1).max(100),
   city: z.string().trim().min(1).max(100),
   postalCode: z.string().trim().max(20).optional(),
   notes: z.string().trim().max(500).optional(),

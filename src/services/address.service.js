@@ -2,6 +2,10 @@ const mongoose = require('mongoose');
 const httpStatus = require('../constants/httpStatus');
 const Address = require('../models/address.model');
 const ApiError = require('../utils/ApiError');
+const roles = require('../constants/roles');
+
+const addressTypeForUser = (user) =>
+  user.role === roles.BUYER ? 'SHIPPING' : user.role === roles.SELLER ? 'PICKUP' : 'BOTH';
 
 const listAddresses = (user) =>
   Address.find({ userId: user._id, isActive: true }).sort({ isDefault: -1, createdAt: -1 });
@@ -24,7 +28,10 @@ const createAddress = async (user, data) => {
   try {
     let address;
     await session.withTransaction(async () => {
-      const docs = await Address.create([{ ...data, userId: user._id }], { session });
+      const docs = await Address.create(
+        [{ ...data, userId: user._id, addressType: addressTypeForUser(user) }],
+        { session },
+      );
       address = docs[0];
       await setDefaultIfNeeded(address, session);
     });
@@ -42,7 +49,7 @@ const getOwnedAddress = async (user, id) => {
 
 const updateAddress = async (user, id, data) => {
   const address = await getOwnedAddress(user, id);
-  Object.assign(address, data);
+  Object.assign(address, data, { addressType: addressTypeForUser(user) });
   await address.save();
   if (address.isDefault) await setDefaultIfNeeded(address);
   return address;

@@ -19,7 +19,8 @@
     "worker:complete-deliveries": "node src/workers/deliveryCompletion.worker.js",
     "worker:dispute-deadlines": "node src/workers/disputeDeadline.worker.js",
     "worker:notification-outbox": "node src/workers/notificationOutbox.worker.js",
-    "migrate:roles": "node scripts/upgradeRoles.js"
+    "migrate:roles": "node scripts/upgradeRoles.js",
+    "migrate:remove-address-district": "node scripts/removeAddressDistrict.js"
   },
   "keywords": [
     "sifit",

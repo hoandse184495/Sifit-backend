@@ -13,7 +13,6 @@ const snapshotAddress = (address) => ({
   phone: address.phone,
   addressLine: address.addressLine,
   ward: address.ward,
-  district: address.district,
   province: address.province,
   postalCode: address.postalCode,
 });
@@ -79,7 +78,6 @@ const createShipment = async (seller, orderId, data) => {
       phone: order.shippingAddress.phone,
       addressLine: order.shippingAddress.addressLine,
       ward: order.shippingAddress.ward,
-      district: order.shippingAddress.district,
       province: order.shippingAddress.city,
       postalCode: order.shippingAddress.postalCode,
     },

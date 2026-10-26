@@ -6,7 +6,6 @@ const addressSnapshotSchema = new mongoose.Schema(
     phone: String,
     addressLine: String,
     ward: String,
-    district: String,
     province: String,
     city: String,
     postalCode: String,

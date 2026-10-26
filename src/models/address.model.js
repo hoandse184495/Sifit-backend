@@ -8,7 +8,6 @@ const addressSchema = new mongoose.Schema(
     phone: { type: String, required: true, trim: true },
     addressLine: { type: String, required: true, trim: true, maxlength: 255 },
     ward: { type: String, required: true, trim: true },
-    district: { type: String, required: true, trim: true },
     province: { type: String, required: true, trim: true },
     postalCode: { type: String, trim: true },
     addressType: {

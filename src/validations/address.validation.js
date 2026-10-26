@@ -9,7 +9,6 @@ const addressBody = z.object({
   phone,
   addressLine: z.string().trim().min(1).max(255),
   ward: z.string().trim().min(1).max(100),
-  district: z.string().trim().min(1).max(100),
   province: z.string().trim().min(1).max(100),
   postalCode: z.string().trim().max(20).optional(),
   addressType: z.enum(['SHIPPING', 'PICKUP', 'BOTH']).default('BOTH'),

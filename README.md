@@ -317,7 +317,6 @@ Checkout:
     "phone": "0901234567",
     "addressLine": "123 Nguyen Trai",
     "ward": "Ben Thanh",
-    "district": "District 1",
     "city": "Ho Chi Minh City"
   },
   "notes": "Please call before delivery",
