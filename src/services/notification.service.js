@@ -6,11 +6,13 @@ const preferenceService = require('./notificationPreference.service');
 const getSocket = () => require('../socket');
 
 const preferenceByType = {
+  FOLLOWED_SHOP_NEW_PRODUCT: 'followedShopNotifications',
   NEW_MESSAGE: 'messageNotifications',
   PRODUCT_SUBMITTED: 'productNotifications',
   PRODUCT_APPROVED: 'productNotifications',
   PRODUCT_REJECTED: 'productNotifications',
   ORDER_CREATED: 'orderNotifications',
+  OFFER_UPDATED: 'orderNotifications',
   ORDER_CANCELLED: 'orderNotifications',
   SHIPMENT_CREATED: 'shippingNotifications',
   SHIPMENT_PICKED_UP: 'shippingNotifications',
@@ -22,7 +24,18 @@ const preferenceByType = {
   PAYOUT_COMPLETED: 'payoutNotifications',
 };
 
-const criticalTypes = new Set(['PAYMENT_CONFIRMED', 'DISPUTE_OPENED', 'DISPUTE_RESOLVED']);
+const criticalTypes = new Set([
+  'SELLER_VERIFICATION_UPDATED',
+  'PAYMENT_REVIEW_UPDATED',
+  'DISPUTE_UPDATED',
+  'PAYMENT_CONFIRMED',
+  'DISPUTE_OPENED',
+  'DISPUTE_RESOLVED',
+  'PRODUCT_HIDDEN',
+  'PRODUCT_REPORT_RESOLVED',
+  'REPORTING_POLICY',
+  'REFUND_UPDATED',
+]);
 
 const shouldCreateNotification = async (recipientId, type) => {
   if (criticalTypes.has(type)) return true;
@@ -49,6 +62,11 @@ const listNotifications = async (user, { page = 1, limit = 20, isRead }) => {
 
 const createNotification = async (data, options = {}) => {
   if (data.actorId && String(data.actorId) === String(data.recipientId)) return null;
+  if (
+    data.type === 'FOLLOWED_SHOP_NEW_PRODUCT' &&
+    !(await require('./shopFollow.service').canDeliverProductNotification(data))
+  )
+    return null;
   if (!(await shouldCreateNotification(data.recipientId, data.type))) return null;
 
   const notification = await Notification.findOneAndUpdate(

@@ -16,12 +16,23 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(httpStatus.OK, { profile }, 'Seller profile updated'));
 });
 const getPublicShop = asyncHandler(async (req, res) => {
-  const result = await sellerProfileService.getPublicShop(req.params.slug);
+  const result = await sellerProfileService.getPublicShop(req.params.slug, req.query);
   res.status(200).json(new ApiResponse(httpStatus.OK, result, 'Shop retrieved'));
 });
 const listPublicShops = asyncHandler(async (req, res) => {
   const result = await sellerProfileService.listPublicShops(req.query);
   res.status(200).json(new ApiResponse(httpStatus.OK, result, 'Shops retrieved'));
 });
+const getPublicShopBySeller = asyncHandler(async (req, res) => {
+  const result = await sellerProfileService.getPublicShopBySeller(req.params.sellerId);
+  res.json(new ApiResponse(200, result, 'Shop retrieved'));
+});
 
-module.exports = { createProfile, getOwnProfile, getPublicShop, listPublicShops, updateProfile };
+module.exports = {
+  createProfile,
+  getOwnProfile,
+  getPublicShop,
+  getPublicShopBySeller,
+  listPublicShops,
+  updateProfile,
+};

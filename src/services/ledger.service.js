@@ -40,7 +40,7 @@ const postEntry = async ({ sourceType, sourceId, sourceEventKey, description, li
 
 const postPaymentSuccess = async ({ payment, orders, eventId }, session) => {
   const lines = [
-    { account: 'provider_clearing', debit: payment.amount, credit: 0, currency: 'VND' },
+    { account: payment.provider === 'payos' ? 'customer_funds_unallocated' : 'provider_clearing', debit: payment.amount, credit: 0, currency: 'VND' },
   ];
 
   orders.forEach((order) => {
@@ -63,8 +63,8 @@ const postPaymentSuccess = async ({ payment, orders, eventId }, session) => {
     {
       sourceType: 'PAYMENT',
       sourceId: String(payment._id),
-      sourceEventKey: `payment:${eventId}:success`,
-      description: 'Verified simulator payment success',
+      sourceEventKey: payment.provider === 'payos' ? `payment:${payment._id}:allocated` : `payment:${eventId}:success`,
+      description: `Verified ${payment.provider} payment success`,
       lines,
     },
     session,

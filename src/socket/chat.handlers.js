@@ -39,6 +39,9 @@ const emitError = (socket, event, error, clientMessageId) => {
 };
 
 const registerChatHandlers = (io, socket) => {
+  socket.on('disconnect', () => {
+    for (const key of rateBuckets.keys()) if (key.startsWith(`${socket.id}:`)) rateBuckets.delete(key);
+  });
   socket.on('conversation:join', async (payload, ack) => {
     try {
       checkRate(socket, 'join', 60);

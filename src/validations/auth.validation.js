@@ -32,6 +32,14 @@ const changePasswordSchema = z.object({
   }),
 });
 
+const googleLoginSchema = z.object({
+  body: z.object({
+    credential: z.string().min(1).max(16000),
+    role: z.enum(['BUYER', 'SELLER']).default('BUYER'),
+    currentPassword: z.string().min(1).max(128).optional(),
+  }),
+});
+
 const validate = (schema) => (req, res, next) => {
   const parsed = schema.safeParse({
     body: req.body,
@@ -55,6 +63,7 @@ const validate = (schema) => (req, res, next) => {
 };
 
 module.exports = {
+  googleLoginSchema,
   changePasswordSchema,
   loginSchema,
   registerSchema,

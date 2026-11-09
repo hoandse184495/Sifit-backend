@@ -98,6 +98,7 @@ const productSchema = new mongoose.Schema(
       default: 1,
       immutable: true,
     },
+    reservationGroupId: { type: mongoose.Schema.Types.ObjectId, ref: 'CheckoutGroup', index: true },
     rejectionReason: {
       type: String,
       trim: true,
@@ -105,6 +106,7 @@ const productSchema = new mongoose.Schema(
     approvedAt: {
       type: Date,
     },
+    firstPublishedAt: Date,
     approvedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -127,6 +129,8 @@ const productSchema = new mongoose.Schema(
 );
 
 productSchema.index({ createdAt: -1 });
+productSchema.index({ sellerId: 1, status: 1, deletedAt: 1, createdAt: -1, _id: -1 });
+productSchema.index({ sellerId: 1, status: 1, deletedAt: 1, price: 1, _id: 1 });
 productSchema.index({ title: 'text', description: 'text' });
 
 module.exports = mongoose.model('Product', productSchema);

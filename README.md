@@ -1,5 +1,9 @@
 # SIFIT Backend
 
+Google sign-in setup and validation: [GOOGLE_SIGNIN.md](GOOGLE_SIGNIN.md).
+
+Local account suspension, concurrent admin safety and independent API rate limits: [SECURITY_FIXES_R1_R3.md](SECURITY_FIXES_R1_R3.md).
+
 SIFIT is a production-oriented backend foundation for a C2C second-hand fashion marketplace. It is designed for users who can buy and sell from the same account, while SIFIT later manages commissions, verified payments, seller payouts, disputes, and admin operations.
 
 This initialization focuses only on the backend foundation: Express application setup, environment validation, MongoDB connection management, centralized errors, a health endpoint, testing, linting, and maintainable project structure.
@@ -72,7 +76,7 @@ SHIPPING_PROVIDER=simulator
 SHIPPING_MODE=sandbox
 SHIPPING_WEBHOOK_SECRET=
 BUYER_PROTECTION_DAYS=3
-SELLER_VERIFICATION_MODE=simulation
+SELLER_VERIFICATION_MODE=manual
 COMMISSION_RATE=10
 REVIEW_EDIT_WINDOW_DAYS=7
 SOCKET_IO_ENABLED=true
@@ -161,6 +165,14 @@ Revokes the current refresh session and clears the refresh cookie. Repeated logo
 ### `GET /api/v1/auth/me`
 
 Requires an `Authorization: Bearer <accessToken>` header and returns the current safe user profile.
+
+### Personal profile updates
+
+- `PATCH /api/v1/auth/me`: update `fullName` and/or `phone`. Empty phone clears it. Email, role and authentication fields cannot be changed through this endpoint.
+- `POST /api/v1/auth/me/avatar`: multipart file field `avatar`, one JPEG, PNG or WebP image up to 5 MB. Image bytes are validated and Cloudinary stores a 320 x 320 avatar.
+- `DELETE /api/v1/auth/me/avatar`: remove the current avatar; repeat requests are safe.
+
+All three endpoints require authentication and a trusted request origin. Responses return `{ user }` with the saved public profile. Replacement/removal cleans up owned Cloudinary assets without deleting external Google images. Configure the existing Cloudinary environment variables for avatar uploads. Run `npm test -- --runInBand tests/profile.test.js` for profile API tests.
 
 ### `PATCH /api/v1/auth/change-password`
 
@@ -488,7 +500,7 @@ Verification APIs:
 - `PATCH /api/v1/admin/seller-verifications/:id/approve`
 - `PATCH /api/v1/admin/seller-verifications/:id/reject`
 
-The current verification mode is simulation-only. It must not be treated as completed legal KYC in production.
+Verification now uses private manual-review dossiers, owner/bank evidence, versioned admin decisions and notifications. Manual payouts require an approved dossier matching the destination account; changing the bank requires reverification for new payouts. Existing approved payouts retain their verified bank snapshot. See [SELLER_VERIFICATION.md](SELLER_VERIFICATION.md) for the workflow, APIs, legacy simulated records and tests. This is human review, not an automated identity or bank verification service.
 
 ## Addresses
 
@@ -758,6 +770,18 @@ The project follows `Route -> Controller -> Service -> Model`.
 - Middleware handles cross-cutting concerns such as rate limiting and errors.
 
 ## Marketplace Notes
+
+Public shops now provide server-side product pagination, literal keyword search, combined category/brand/size/condition/price filters and stable sorting. Filter options cover the whole shop, and a direct seller lookup replaces downloading all shops. See [SHOP_CATALOG.md](SHOP_CATALOG.md) for APIs, indexes and browser verification.
+
+Structured price offers are implemented: buyer proposals, seller acceptance/rejection, expiry and one-use negotiated prices at checkout, with private history and notifications. Totals, commission snapshots and payment amounts use the validated server price. See [OFFERS.md](OFFERS.md) for rules, endpoints, production indexes and verification.
+
+Reservation expiry, payment reconciliation and queued notification delivery now run automatically with the API. Defaults are 60 seconds for maintenance and 15 seconds for notifications, with shared MongoDB leases, startup recovery and graceful shutdown. See [BACKGROUND_JOBS.md](BACKGROUND_JOBS.md) for configuration, PayOS expiry guards and verification. Manual completion and real-money payout approvals remain explicit admin actions.
+
+PayOS QR collection, bank receipt history, seller-booked manual shipping, explicit admin order completion and audited manual bank payouts are implemented. See [PAYOS_SETUP.md](PAYOS_SETUP.md) for the workflow, local webhook tunnel and checks. PayOS has no separate sandbox; automated tests isolate all external payment calls.
+
+Product violation reports, persistent per-account anti-spam quotas, admin resolution and reporting restrictions are implemented. See [PRODUCT_REPORTS.md](PRODUCT_REPORTS.md) for endpoints, transactional guarantees, indexes and verification.
+
+Buyers can follow shops, browse their available products and receive notifications when admins first approve new listings. Per-shop and global notification controls are persisted. See [SHOP_FOLLOWS.md](SHOP_FOLLOWS.md) for APIs, outbox delivery, indexes and verification.
 
 Authorization roles are `BUYER`, `SELLER`, and `ADMIN`. Buyers create carts, wishlists, purchase orders and product conversations. Sellers manage products, shops, shipping, verification and earnings. Admins use the dedicated moderation endpoints. All `/seller` endpoints enforce the seller role; existing ownership checks still apply. Shared chat, notifications and addresses remain available to authenticated accounts.
 

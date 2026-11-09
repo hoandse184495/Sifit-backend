@@ -30,6 +30,8 @@ const itemSnapshotSchema = new mongoose.Schema(
       min: 1,
       max: 1,
     },
+    offerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' },
+    listingPrice: Number,
   },
   { _id: false },
 );
@@ -123,6 +125,14 @@ const orderSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
     },
+    completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    completionNote: { type: String, maxlength: 1000 },
+    settlementVersion: { type: Number, default: 0 },
+    refundedAmount: { type: Number, default: 0, min: 0 },
+    refundPendingAmount: { type: Number, default: 0, min: 0 },
+    refundedSellerProceeds: { type: Number, default: 0, min: 0 },
+    refundedCommissionAmount: { type: Number, default: 0, min: 0 },
+    sellerAcceptedAt: Date,
     cancellationReason: {
       type: String,
       trim: true,

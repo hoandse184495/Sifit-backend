@@ -10,6 +10,7 @@ const createOrder = asyncHandler(async (req, res) => {
     shippingAddress: req.body.shippingAddress,
     notes: req.body.notes,
     idempotencyKey: req.body.idempotencyKey,
+    offerIds: req.body.offerIds,
   });
   const response = new ApiResponse(httpStatus.CREATED, { checkout }, 'Checkout created');
 

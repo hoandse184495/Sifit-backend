@@ -30,6 +30,14 @@ const checkoutSchema = z.object({
     shippingAddress: shippingAddressSchema,
     notes: z.string().trim().max(500).optional(),
     idempotencyKey: z.uuid(),
+    offerIds: z
+      .array(objectId)
+      .max(30)
+      .refine(
+        (ids) => new Set(ids.map((id) => id.toLowerCase())).size === ids.length,
+        'Duplicate offer ids',
+      )
+      .optional(),
   }),
 });
 

@@ -11,6 +11,8 @@ const ApiError = require('../utils/ApiError');
 const { createRequestFingerprint } = require('../utils/idempotency');
 const { calculateCommission } = require('../utils/money');
 const notificationEventService = require('./notificationEvent.service');
+const offerService = require('./offer.service');
+const { visibleSellerIds } = require('./publicSeller.service');
 
 const getReservationExpiry = () =>
   new Date(Date.now() + env.RESERVATION_EXPIRES_IN_MINUTES * 60 * 1000);
@@ -52,7 +54,7 @@ const loadExistingIdempotentResult = async ({ buyerId, idempotencyKey, requestFi
   return summarizeCheckoutGroup(existing);
 };
 
-const validateCheckoutProducts = (buyer, products, cartProductIds) => {
+const validateCheckoutProducts = (buyer, products, cartProductIds, sellers) => {
   if (products.length !== cartProductIds.length) {
     throw new ApiError(httpStatus.CONFLICT, 'Some cart products are no longer available');
   }
@@ -62,11 +64,11 @@ const validateCheckoutProducts = (buyer, products, cartProductIds) => {
       throw new ApiError(httpStatus.CONFLICT, 'Some cart products are no longer available');
     }
 
-    if (product.sellerId._id.equals(buyer._id)) {
+    if (product.sellerId?._id.equals(buyer._id)) {
       throw new ApiError(httpStatus.FORBIDDEN, 'You cannot purchase your own product');
     }
 
-    if (product.sellerId.status !== 'ACTIVE') {
+    if (!sellers.has(String(product.sellerId?._id))) {
       throw new ApiError(httpStatus.CONFLICT, 'A seller is currently suspended');
     }
   });
@@ -84,8 +86,12 @@ const groupProductsBySeller = (products) =>
     return groups;
   }, new Map());
 
-const createCheckout = async ({ buyer, shippingAddress, notes, idempotencyKey }) => {
-  const requestFingerprint = createRequestFingerprint({ shippingAddress, notes });
+const createCheckout = async ({ buyer, shippingAddress, notes, idempotencyKey, offerIds = [] }) => {
+  const requestFingerprint = createRequestFingerprint({
+    shippingAddress,
+    notes,
+    ...(offerIds.length ? { offerIds: offerIds.map((id) => id.toLowerCase()).sort() } : {}),
+  });
   const existingResult = await loadExistingIdempotentResult({
     buyerId: buyer._id,
     idempotencyKey,
@@ -116,10 +122,16 @@ const createCheckout = async ({ buyer, shippingAddress, notes, idempotencyKey })
         .populate({ path: 'sellerId', select: 'fullName avatar status' })
         .session(session);
 
-      validateCheckoutProducts(buyer, products, cartProductIds);
+      const sellers = await visibleSellerIds(
+        products.map((product) => product.sellerId?._id),
+        session,
+      );
+      validateCheckoutProducts(buyer, products, cartProductIds, sellers);
+      const offers = await offerService.checkoutOffers({ buyer, products, offerIds, session });
+      const price = (product) => offers.get(String(product._id))?.amount ?? product.price;
 
       const reservationExpiresAt = getReservationExpiry();
-      const subtotal = products.reduce((sum, product) => sum + product.price, 0);
+      const subtotal = products.reduce((sum, product) => sum + price(product), 0);
       const checkoutGroups = await CheckoutGroup.create(
         [
           {
@@ -142,7 +154,7 @@ const createCheckout = async ({ buyer, shippingAddress, notes, idempotencyKey })
       for (const product of products) {
         const reservation = await Product.updateOne(
           { _id: product._id, status: 'ACTIVE', deletedAt: null },
-          { status: 'RESERVED' },
+          { status: 'RESERVED', reservationGroupId: checkoutGroup._id },
           { session },
         );
 
@@ -152,10 +164,11 @@ const createCheckout = async ({ buyer, shippingAddress, notes, idempotencyKey })
       }
 
       const orders = [];
+      await offerService.consume(offers, checkoutGroup._id, session);
       const groupedProducts = groupProductsBySeller(products);
 
       for (const [sellerId, sellerProducts] of groupedProducts.entries()) {
-        const sellerSubtotal = sellerProducts.reduce((sum, product) => sum + product.price, 0);
+        const sellerSubtotal = sellerProducts.reduce((sum, product) => sum + price(product), 0);
         const commission = calculateCommission(sellerSubtotal);
         const orderDocs = await Order.create(
           [
@@ -167,7 +180,10 @@ const createCheckout = async ({ buyer, shippingAddress, notes, idempotencyKey })
                 productId: product._id,
                 title: product.title,
                 image: product.images[0]?.url,
-                price: product.price,
+                price: price(product),
+                ...(offers.has(String(product._id))
+                  ? { offerId: offers.get(String(product._id))._id, listingPrice: product.price }
+                  : {}),
                 quantity: 1,
               })),
               shippingAddress,

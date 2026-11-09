@@ -1,11 +1,16 @@
 const NotificationPreference = require('../models/notificationPreference.model');
 
 const getOrCreatePreferences = async (user) => {
-  let preferences = await NotificationPreference.findOne({ userId: user._id });
-  if (!preferences) {
-    preferences = await NotificationPreference.create({ userId: user._id });
+  try {
+    return await NotificationPreference.findOneAndUpdate(
+      { userId: user._id },
+      { $setOnInsert: { userId: user._id } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+  } catch (error) {
+    if (error.code === 11000) return NotificationPreference.findOne({ userId: user._id });
+    throw error;
   }
-  return preferences;
 };
 
 const updatePreferences = async (user, data) =>

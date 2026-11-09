@@ -28,6 +28,8 @@ const sellerProfileSchema = new mongoose.Schema(
       default: 'NOT_SUBMITTED',
       index: true,
     },
+    verificationId: { type: mongoose.Schema.Types.ObjectId, ref: 'SellerVerification', select: false },
+    verificationVersion: { type: Number, default: 0, select: false },
     status: { type: String, enum: ['ACTIVE', 'SUSPENDED'], default: 'ACTIVE', index: true },
     totalSales: { type: Number, default: 0, min: 0 },
     ratingAverage: { type: Number, default: 0, min: 0, max: 5 },

@@ -65,7 +65,7 @@ const listShopRatings = async (slug, { page = 1, limit = 20 }) => {
   const query = { sellerId: profile.userId, status: 'PUBLISHED' };
   const [items, total] = await Promise.all([
     SellerRating.find(query)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .populate({ path: 'buyerId', select: 'fullName avatar' }),

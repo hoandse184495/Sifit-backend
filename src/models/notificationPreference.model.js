@@ -13,6 +13,7 @@ const notificationPreferenceSchema = new mongoose.Schema(
     messageNotifications: { type: Boolean, default: true },
     orderNotifications: { type: Boolean, default: true },
     productNotifications: { type: Boolean, default: true },
+    followedShopNotifications: { type: Boolean, default: true },
     shippingNotifications: { type: Boolean, default: true },
     reviewNotifications: { type: Boolean, default: true },
     payoutNotifications: { type: Boolean, default: true },

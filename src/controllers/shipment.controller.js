@@ -35,6 +35,7 @@ const handleWebhook = asyncHandler(async (req, res) => {
 });
 const confirmReceipt = asyncHandler(async (req, res) => {
   const order = await deliveryService.confirmReceipt(req.params.id, req.user);
+  await require('../utils/flushNotifications')([order._id]);
   res.status(200).json(new ApiResponse(httpStatus.OK, { order }, 'Receipt confirmed'));
 });
 const reviewDelivery = asyncHandler(async (req, res) => {

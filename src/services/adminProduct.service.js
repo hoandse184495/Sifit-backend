@@ -51,45 +51,82 @@ const listPendingProducts = async ({ page = 1, limit = 20 }) => {
 };
 
 const approveProduct = async (id, admin) => {
-  const product = await Product.findOneAndUpdate(
-    { _id: id, status: 'PENDING', deletedAt: null },
-    {
-      status: 'ACTIVE',
-      approvedAt: new Date(),
-      approvedBy: admin._id,
-      $unset: { rejectionReason: '' },
-    },
-    { new: true },
-  );
+  const product = await require('../utils/withTransaction')(async (session) => {
+    const before = await Product.findOne({ _id: id, status: 'PENDING', deletedAt: null }).session(
+      session,
+    );
+    if (!before) throw new ApiError(httpStatus.CONFLICT, 'Only pending products can be approved');
+    const firstApproval = !before.firstPublishedAt && !before.approvedAt;
+    const publishedAt = before.firstPublishedAt || before.approvedAt || new Date();
+    const product = await Product.findOneAndUpdate(
+      { _id: id, status: 'PENDING', deletedAt: null },
+      {
+        status: 'ACTIVE',
+        approvedAt: new Date(),
+        approvedBy: admin._id,
+        firstPublishedAt: publishedAt,
+        $unset: { rejectionReason: '' },
+      },
+      { new: true, session },
+    );
 
-  if (!product) {
-    throw new ApiError(httpStatus.CONFLICT, 'Only pending products can be approved');
-  }
+    if (!product) {
+      throw new ApiError(httpStatus.CONFLICT, 'Only pending products can be approved');
+    }
 
-  await notificationEventService.enqueueNotificationEvent({
-    eventKey: `product:${product._id}:approved`,
-    type: 'NOTIFICATION_CREATE',
-    payload: {
-      recipientId: product.sellerId,
-      actorId: admin._id,
-      type: 'PRODUCT_APPROVED',
-      title: 'Product approved',
-      body: 'Your product has been approved',
+    await notificationEventService.enqueueNotificationEvent(
+      {
+        eventKey: `product:${product._id}:approved`,
+        type: 'NOTIFICATION_CREATE',
+        payload: {
+          recipientId: product.sellerId,
+          actorId: admin._id,
+          type: 'PRODUCT_APPROVED',
+          title: 'Product approved',
+          body: 'Your product has been approved',
+          resourceType: 'PRODUCT',
+          resourceId: product._id,
+          eventKey: `product:${product._id}:approved`,
+        },
+      },
+      { session },
+    );
+
+    if (firstApproval) {
+      const shop = await require('../models/sellerProfile.model')
+        .findOne({ userId: product.sellerId, status: 'ACTIVE' })
+        .session(session);
+      if (shop)
+        await notificationEventService.enqueueNotificationEvent(
+          {
+            eventKey: `shop-product:${product._id}:first-approved`,
+            type: 'SHOP_PRODUCT_APPROVED',
+            payload: {
+              resourceId: product._id,
+              productId: product._id,
+              shopId: shop._id,
+              approvedAt: publishedAt,
+            },
+          },
+          { session },
+        );
+    }
+
+    await auditService.record({
+      admin,
+      session,
+      action: 'PRODUCT_APPROVED',
       resourceType: 'PRODUCT',
       resourceId: product._id,
-      eventKey: `product:${product._id}:approved`,
-    },
-  });
+      before: { status: 'PENDING' },
+      after: product.toObject(),
+    });
 
-  await auditService.record({
-    admin,
-    action: 'PRODUCT_APPROVED',
-    resourceType: 'PRODUCT',
-    resourceId: product._id,
-    before: { status: 'PENDING' },
-    after: product.toObject(),
+    return product;
   });
-
+  // First pass expands the durable announcement; second pass delivers its notifications.
+  await require('../utils/flushNotifications')([product._id]);
+  await require('../utils/flushNotifications')([product._id]);
   return product;
 };
 

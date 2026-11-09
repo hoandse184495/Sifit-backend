@@ -23,6 +23,8 @@ const commissionSchema = new mongoose.Schema(
     },
     recognizedAt: Date,
     reversedAt: Date,
+    refundedCommissionAmount: { type: Number, default: 0, min: 0 },
+    refundedSellerProceeds: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true },
 );

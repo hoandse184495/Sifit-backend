@@ -2,6 +2,7 @@ const httpStatus = require('../constants/httpStatus');
 const Cart = require('../models/cart.model');
 const Product = require('../models/product.model');
 const ApiError = require('../utils/ApiError');
+const { visibleSellerIds } = require('./publicSeller.service');
 
 const MAX_CART_ITEMS = 30;
 
@@ -23,6 +24,7 @@ const formatCart = async (cart) => {
     populate: { path: 'sellerId', select: 'fullName avatar status' },
   });
 
+  const sellers = await visibleSellerIds(cart.items.map((item) => item.productId?.sellerId?._id));
   let estimatedSubtotal = 0;
   const items = cart.items.map((item) => {
     const product = item.productId;
@@ -31,7 +33,7 @@ const formatCart = async (cart) => {
       product.deletedAt ||
       product.status !== 'ACTIVE' ||
       !product.sellerId ||
-      product.sellerId.status !== 'ACTIVE';
+      !sellers.has(String(product.sellerId._id));
 
     if (!unavailable) {
       estimatedSubtotal += product.price;
@@ -86,11 +88,11 @@ const addItem = async (user, productId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Product is not available');
   }
 
-  if (product.sellerId._id.equals(user._id)) {
+  if (product.sellerId?._id.equals(user._id)) {
     throw new ApiError(httpStatus.FORBIDDEN, 'You cannot add your own product to cart');
   }
 
-  if (product.sellerId.status !== 'ACTIVE') {
+  if (!(await visibleSellerIds([product.sellerId?._id])).has(String(product.sellerId?._id))) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Product is not available');
   }
 

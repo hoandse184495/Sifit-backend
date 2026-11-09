@@ -5,7 +5,6 @@ const paymentStatus = require('../constants/paymentStatus');
 const roles = require('../constants/roles');
 const CheckoutGroup = require('../models/checkoutGroup.model');
 const Order = require('../models/order.model');
-const Product = require('../models/product.model');
 const ApiError = require('../utils/ApiError');
 const notificationEventService = require('./notificationEvent.service');
 const Dispute = require('../models/dispute.model');
@@ -16,14 +15,25 @@ const { getDisputeEligibility } = require('./disputePolicy');
 
 const withBuyerDetails = async (orders) => {
   const ids = orders.map((order) => order._id);
-  const [disputes, ratings, reviews] = await Promise.all([
-    Dispute.find({ orderId: { $in: ids }, status: { $in: ['OPEN', 'UNDER_REVIEW'] } })
+  const [disputes, ratings, reviews, refunds] = await Promise.all([
+    Dispute.find({
+      orderId: { $in: ids },
+      $or: [
+        { status: { $in: ['OPEN', 'UNDER_REVIEW'] } },
+        { status: 'RESOLVED_BUYER', refundSettledAt: null },
+      ],
+    })
       .select('orderId status reason')
       .lean(),
     SellerRating.find({ orderId: { $in: ids } })
       .select('orderId rating comment status createdAt')
       .lean(),
     ProductReview.find({ orderId: { $in: ids } }),
+    require('../models/refund.model')
+      .find({ orderId: { $in: ids }, kind: 'MANUAL_BANK' })
+      .select('orderId amount status createdAt')
+      .sort({ createdAt: -1 })
+      .lean(),
   ]);
   return orders.map((order) => {
     const activeDispute = disputes.find((item) => String(item.orderId) === String(order._id));
@@ -32,6 +42,7 @@ const withBuyerDetails = async (orders) => {
       ...order.toObject(),
       disputeEligibility: { ...eligibility, eligible: eligibility.eligible && !activeDispute },
       activeDispute: activeDispute || null,
+      refunds: refunds.filter((item) => String(item.orderId) === String(order._id)),
       sellerRating: ratings.find((item) => String(item.orderId) === String(order._id)) || null,
       productReviews: reviews
         .filter((item) => String(item.orderId) === String(order._id))
@@ -165,6 +176,27 @@ const cancelOrder = async (id, user, reason = 'buyer_cancelled') => {
         throw new ApiError(httpStatus.CONFLICT, 'Only unpaid pending orders can be cancelled');
       }
 
+      const lockedGroup = await CheckoutGroup.findOneAndUpdate(
+        { _id: order.checkoutGroupId, paymentStatus: 'UNPAID', orderStatus: 'PENDING_PAYMENT' },
+        { $inc: { paymentVersion: 1 } },
+        { new: true, session },
+      );
+      if (!lockedGroup) throw new ApiError(409, 'Nhóm đơn không còn chờ thanh toán.');
+      await require('../models/payment.model').updateMany(
+        { checkoutGroupId: order.checkoutGroupId },
+        { $inc: { __v: 1 } },
+        { session },
+      );
+      if (
+        await require('../models/paymentTransaction.model')
+          .exists({ checkoutGroupId: order.checkoutGroupId })
+          .session(session)
+      )
+        throw new ApiError(
+          409,
+          'Đã có biên nhận tiền, cần admin đối soát và xử lý hoàn trước khi hủy.',
+        );
+
       const groupOrders = await Order.find({ checkoutGroupId: order.checkoutGroupId }).session(
         session,
       );
@@ -172,10 +204,10 @@ const cancelOrder = async (id, user, reason = 'buyer_cancelled') => {
         groupOrder.items.map((item) => item.productId),
       );
 
-      await Product.updateMany(
-        { _id: { $in: productIds }, status: 'RESERVED' },
-        { status: 'ACTIVE' },
-        { session },
+      await require('./inventoryReservation.service').release(
+        order.checkoutGroupId,
+        productIds,
+        session,
       );
 
       await Order.updateMany(

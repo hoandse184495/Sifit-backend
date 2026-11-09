@@ -12,6 +12,7 @@ const {
 const router = express.Router();
 
 router.use(authenticate);
+router.get('/config', (req, res) => res.json({ success: true, data: { provider: require('../config/env').PAYMENT_PROVIDER, configured: require('../config/env').PAYMENT_PROVIDER !== 'payos' || require('../config/payos').isConfigured(), shippingProvider: require('../config/env').SHIPPING_PROVIDER, payoutMode: require('../config/env').PAYOUT_MODE } }));
 
 // Sellers may settle historical purchases, but cannot create new checkout orders.
 router.post(

@@ -47,7 +47,8 @@ const getPayout = asyncHandler(async (req, res) => {
 });
 
 const approvePayout = asyncHandler(async (req, res) => {
-  const payout = await payoutService.approvePayout(req.params.id);
+  const current = await payoutService.getAdminPayout(req.params.id);
+  const payout = current.provider === 'manual' ? await require('../services/marketplaceWorkflow.service').approveManualPayout(req.user, req.params.id) : await payoutService.approvePayout(req.params.id);
   const response = new ApiResponse(httpStatus.OK, { payout }, 'Payout approved');
   res.status(response.statusCode).json(response);
 });

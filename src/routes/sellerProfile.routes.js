@@ -4,7 +4,8 @@ const authenticate = require('../middlewares/auth.middleware');
 const {
   createProfileSchema,
   listShopSchema,
-  slugParamSchema,
+  publicShopSchema,
+  sellerShopSchema,
   updateProfileSchema,
   validate,
 } = require('../validations/sellerProfile.validation');
@@ -12,7 +13,12 @@ const {
 const router = express.Router();
 
 router.get('/shops', validate(listShopSchema), sellerProfileController.listPublicShops);
-router.get('/shops/:slug', validate(slugParamSchema), sellerProfileController.getPublicShop);
+router.get(
+  '/shops/by-seller/:sellerId',
+  validate(sellerShopSchema),
+  sellerProfileController.getPublicShopBySeller,
+);
+router.get('/shops/:slug', validate(publicShopSchema), sellerProfileController.getPublicShop);
 router.post(
   '/seller/profile',
   authenticate,

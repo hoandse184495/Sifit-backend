@@ -13,6 +13,8 @@ const sensitiveKeys = [
 
 const maskSensitive = (value) => {
   if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value.toHexString === 'function') return value.toHexString();
   if (Array.isArray(value)) return value.map(maskSensitive);
 
   return Object.entries(value).reduce((result, [key, entry]) => {
@@ -25,8 +27,8 @@ const maskSensitive = (value) => {
   }, {});
 };
 
-const record = ({ admin, action, resourceType, resourceId, reason, before, after, req }) =>
-  AdminAuditLog.create({
+const record = async ({ admin, action, resourceType, resourceId, reason, before, after, req, session }) => {
+  const [entry] = await AdminAuditLog.create([{
     adminId: admin._id,
     action,
     resourceType,
@@ -36,7 +38,9 @@ const record = ({ admin, action, resourceType, resourceId, reason, before, after
     after: maskSensitive(after),
     ipAddress: req?.ip,
     userAgent: req?.get?.('user-agent'),
-  });
+  }], { session });
+  return entry;
+};
 
 const list = async ({
   page = 1,

@@ -22,6 +22,7 @@ const updatePreferencesSchema = z.object({
       messageNotifications: z.boolean().optional(),
       orderNotifications: z.boolean().optional(),
       productNotifications: z.boolean().optional(),
+      followedShopNotifications: z.boolean().optional(),
       shippingNotifications: z.boolean().optional(),
       reviewNotifications: z.boolean().optional(),
       payoutNotifications: z.boolean().optional(),

@@ -67,6 +67,7 @@ const checkoutGroupSchema = new mongoose.Schema(
     cancelledAt: {
       type: Date,
     },
+    paymentVersion: { type: Number, default: 0 },
     cancellationReason: {
       type: String,
       trim: true,

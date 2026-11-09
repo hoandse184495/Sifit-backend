@@ -18,9 +18,11 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: {
       type: String,
-      required: true,
+      required() { return this.authProvider !== 'google'; },
       select: false,
     },
+    googleId: { type: String, select: false, unique: true, sparse: true },
+    authProvider: { type: String, enum: ['local', 'google', 'both'], default: 'local' },
     role: {
       type: String,
       enum: Object.values(roles),
@@ -35,6 +37,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    avatarPublicId: { type: String, select: false },
+    productReportVersion: { type: Number, default: 0, select: false },
+    reportingBlockedUntil: { type: Date, select: false },
+    reportingWarning: { type: String, maxlength: 1000, select: false },
     phone: {
       type: String,
       trim: true,
@@ -52,6 +58,11 @@ const userSchema = new mongoose.Schema(
     toJSON: {
       transform(doc, ret) {
         delete ret.passwordHash;
+        delete ret.googleId;
+        delete ret.avatarPublicId;
+        delete ret.productReportVersion;
+        delete ret.reportingBlockedUntil;
+        delete ret.reportingWarning;
         delete ret.__v;
         return ret;
       },

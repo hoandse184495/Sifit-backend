@@ -180,7 +180,10 @@ describe('Seller profiles and addresses', () => {
     const shipmentId = new mongoose.Types.ObjectId();
     const legacyAddress = { ...addressBody, district: 'Legacy district' };
     await Address.collection.insertOne({ _id: addressId, ...legacyAddress });
-    await Order.collection.insertOne({ _id: orderId, shippingAddress: { ...shippingAddress, district: 'Legacy district' } });
+    await Order.collection.insertOne({
+      _id: orderId,
+      shippingAddress: { ...shippingAddress, district: 'Legacy district' },
+    });
     await Shipment.collection.insertOne({
       _id: shipmentId,
       pickupAddressSnapshot: legacyAddress,
@@ -228,7 +231,7 @@ describe('Seller profiles and addresses', () => {
     expect(publicShop.body.data.shop.contactPhone).toBeUndefined();
   });
 
-  it('submits and approves simulated seller verification', async () => {
+  it('rejects empty submissions and does not silently approve old simulated verification', async () => {
     const seller = await registerAndLogin('seller@example.com', roles.SELLER);
     const admin = await registerAndLogin('admin@example.com', roles.ADMIN);
     await request(app)
@@ -236,16 +239,26 @@ describe('Seller profiles and addresses', () => {
       .set('Authorization', `Bearer ${seller.accessToken}`)
       .send({ shopName: 'Sifit Vintage' })
       .expect(201);
-    const submit = await request(app)
+    await request(app)
       .post('/api/v1/seller/verification/submit')
       .set('Authorization', `Bearer ${seller.accessToken}`)
-      .expect(201);
+      .expect(400);
+    const profile = await SellerProfile.findOne({ userId: seller.user._id });
+    const legacy = await SellerVerification.create({
+      sellerId: profile._id,
+      verificationMethod: 'SIMULATED_REVIEW',
+    });
     await request(app)
-      .patch(`/api/v1/admin/seller-verifications/${submit.body.data.verification._id}/approve`)
+      .patch(`/api/v1/admin/seller-verifications/${legacy._id}/approve`)
       .set('Authorization', `Bearer ${admin.accessToken}`)
-      .expect(200);
+      .send({
+        expectedVersion: 0,
+        reason: 'Need actual private verification documents',
+        checkedDocuments: true,
+      })
+      .expect(409);
     expect((await SellerProfile.findOne({ userId: seller.user._id })).verificationStatus).toBe(
-      'VERIFIED',
+      'NOT_SUBMITTED',
     );
   });
 
@@ -497,6 +510,16 @@ describe('Shipping, delivery, disputes, and settlement', () => {
       { orderStatus: orderStatus.DELIVERED, deliveredAt: past, protectionEndsAt: past },
     );
     await deliveryService.completeEligibleOrders({ now: new Date() });
+    expect((await Order.findById(order._id)).orderStatus).toBe(orderStatus.DELIVERED);
+    const completionAdmin = await registerAndLogin('completion-admin@example.com', roles.ADMIN);
+    await request(app)
+      .post(`/api/v1/admin/orders/${order.id}/complete`)
+      .set('Authorization', `Bearer ${completionAdmin.accessToken}`)
+      .send({
+        note: 'Delivery proof reviewed after buyer response deadline',
+        allowUnconfirmed: true,
+      })
+      .expect(200);
     await Order.updateOne({ _id: order._id }, { completedAt: past });
     const result = await settlementEligibilityService.evaluateEligibleOrders({ now: new Date() });
     expect(result.eligibleCount).toBe(1);

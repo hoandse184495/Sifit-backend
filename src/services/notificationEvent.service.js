@@ -18,25 +18,37 @@ const enqueueNotificationEvent = async (event, options = {}) =>
   );
 
 const processEvent = async (event) => {
+  if (event.type === 'SHOP_PRODUCT_APPROVED')
+    return require('./shopFollow.service').fanOutApproval(event.payload);
   if (event.type !== 'NOTIFICATION_CREATE') return;
   await notificationService.createNotification(event.payload);
 };
 
-const processBatch = async ({ limit = env.NOTIFICATION_OUTBOX_BATCH_SIZE } = {}) => {
+const processBatch = async ({ limit = env.NOTIFICATION_OUTBOX_BATCH_SIZE, eventKeys } = {}) => {
+  const now = new Date();
+  const due = {
+    $or: [
+      { status: { $in: ['PENDING', 'FAILED'] }, nextAttemptAt: { $lte: now } },
+      { status: 'PROCESSING', lockedAt: { $lte: new Date(now.getTime() - 5 * 60000) } },
+    ],
+  };
   const events = await OutboxEvent.find({
-    status: { $in: ['PENDING', 'FAILED'] },
-    nextAttemptAt: { $lte: new Date() },
+    ...due,
     attempts: { $lt: env.NOTIFICATION_OUTBOX_RETRY_LIMIT },
+    ...(eventKeys ? { eventKey: { $in: eventKeys } } : {}),
   })
     .sort({ createdAt: 1 })
     .limit(limit);
 
   let processed = 0;
-  for (const event of events) {
-    event.status = 'PROCESSING';
-    event.lockedAt = new Date();
-    event.attempts += 1;
-    await event.save();
+  for (const candidate of events) {
+    const lockedAt = new Date();
+    const event = await OutboxEvent.findOneAndUpdate(
+      { _id: candidate._id, ...due, attempts: { $lt: env.NOTIFICATION_OUTBOX_RETRY_LIMIT } },
+      { $set: { status: 'PROCESSING', lockedAt }, $inc: { attempts: 1 } },
+      { new: true },
+    );
+    if (!event) continue;
 
     try {
       await processEvent(event);
@@ -50,7 +62,18 @@ const processBatch = async ({ limit = env.NOTIFICATION_OUTBOX_BATCH_SIZE } = {})
       event.nextAttemptAt = new Date(Date.now() + Math.min(event.attempts, 5) * 60 * 1000);
     }
 
-    await event.save();
+    await OutboxEvent.updateOne(
+      { _id: event._id, status: 'PROCESSING', lockedAt },
+      {
+        $set: {
+          status: event.status,
+          processedAt: event.processedAt,
+          lastError: event.lastError || null,
+          nextAttemptAt: event.nextAttemptAt,
+        },
+        $unset: { lockedAt: 1 },
+      },
+    );
   }
 
   return { processed, scanned: events.length };

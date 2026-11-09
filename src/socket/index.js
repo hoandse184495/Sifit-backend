@@ -5,6 +5,7 @@ const registerChatHandlers = require('./chat.handlers');
 const registerNotificationHandlers = require('./notification.handlers');
 const socketAuth = require('./socketAuth.middleware');
 const presence = require('./presence.service');
+const { refreshSocketUser, installAccountAccess } = require('./accountAccess');
 
 let io;
 
@@ -30,25 +31,49 @@ const initSocket = (server) => {
   io.on('connection', async (socket) => {
     socket.join(userRoom(socket.user._id));
     socket.data.joinedConversations = new Set();
-
-    await presence.addConnection(socket.user._id, socket.id, (recipientId, payload) => {
-      emitToUser(recipientId, 'presence:update', payload);
-    });
-
+    installAccountAccess(socket);
+    // Install handlers before waiting on database presence so initial client
+    // events are not dropped during the connection handshake.
     registerChatHandlers(io, socket);
-    registerNotificationHandlers(socket);
-
-    socket.on('disconnect', async () => {
-      await presence.removeConnection(socket.user._id, socket.id, (recipientId, payload) => {
-        emitToUser(recipientId, 'presence:update', payload);
-      });
+    let presenceReady = Promise.resolve();
+    socket.on('disconnect', () => {
+      presenceReady
+        .then(() =>
+          presence.removeConnection(socket.user._id, socket.id, (recipientId, payload) =>
+            emitToUser(recipientId, 'presence:update', payload),
+          ),
+        )
+        .catch(() => logger.warn('Socket presence cleanup failed'));
     });
+    try {
+      // Close the gap between handshake authentication and joining the user
+      // room: a suspension may have committed between those operations.
+      await refreshSocketUser(socket);
+      if (!socket.connected) return;
+      presenceReady = presence.addConnection(socket.user._id, socket.id, (recipientId, payload) =>
+        emitToUser(recipientId, 'presence:update', payload),
+      );
+      await presenceReady;
+      if (socket.connected) await registerNotificationHandlers(socket);
+    } catch {
+      socket.emit('account:suspended', {
+        message: 'Phiên kết nối không còn khả dụng. Vui lòng đăng nhập lại.',
+      });
+      socket.disconnect(true);
+    }
   });
 
   return io;
 };
 
 const getIo = () => io;
+const disconnectUser = (userId) => {
+  if (!io) return;
+  io.in(userRoom(userId)).emit('account:suspended', {
+    message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.',
+  });
+  io.in(userRoom(userId)).disconnectSockets(true);
+};
 
 const closeSocket = async () => {
   if (!io) return;
@@ -72,6 +97,7 @@ module.exports = {
   emitToConversation,
   emitToUser,
   getIo,
+  disconnectUser,
   initSocket,
   userRoom,
 };

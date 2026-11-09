@@ -17,15 +17,50 @@ const requestRefund = async ({ paymentId, amount, idempotencyKey, reason }) => {
       const existing = await Refund.findOne({ paymentId, idempotencyKey }).session(session);
       if (existing) {
         if (existing.amount !== amount || (existing.reason || '') !== (reason || '')) {
-          throw new ApiError(httpStatus.CONFLICT, 'Idempotency key was used for a different refund');
+          throw new ApiError(
+            httpStatus.CONFLICT,
+            'Idempotency key was used for a different refund',
+          );
         }
         refund = existing;
         return;
       }
       const payment = await Payment.findById(paymentId).session(session);
-      if (!payment || ![paymentAttemptStatus.SUCCEEDED, paymentAttemptStatus.PARTIALLY_REFUNDED].includes(payment.status)) {
+      if (
+        !payment ||
+        ![paymentAttemptStatus.SUCCEEDED, paymentAttemptStatus.PARTIALLY_REFUNDED].includes(
+          payment.status,
+        )
+      ) {
         throw new ApiError(httpStatus.CONFLICT, 'Only successful payments can be refunded');
       }
+      await require('../models/order.model').updateMany(
+        { checkoutGroupId: payment.checkoutGroupId },
+        { $inc: { settlementVersion: 1 } },
+        { session },
+      );
+      const orders = await require('../models/order.model')
+        .find({ checkoutGroupId: payment.checkoutGroupId })
+        .select('_id')
+        .session(session);
+      for (const order of orders)
+        await require('./disputeReturnPolicy.service').assertReturnSatisfied(order._id, session);
+      if (
+        await require('../models/sellerPayout.model')
+          .exists({
+            orderIds: {
+              $in: (
+                await require('../models/order.model')
+                  .find({ checkoutGroupId: payment.checkoutGroupId })
+                  .select('_id')
+                  .session(session)
+              ).map((order) => order._id),
+            },
+            status: { $in: ['PAID', 'PROCESSING'] },
+          })
+          .session(session)
+      )
+        throw new ApiError(409, 'Đơn đã chi trả, cần đối soát thu hồi trước khi hoàn tiền.');
       const refundedAmount = payment.refundedAmount || 0;
       if (amount > payment.amount - refundedAmount) {
         throw new ApiError(httpStatus.CONFLICT, 'Refund amount exceeds refundable amount');

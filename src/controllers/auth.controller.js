@@ -3,6 +3,27 @@ const authService = require('../services/auth.service');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const { getRefreshCookieOptions } = require('../utils/token');
+const env = require('../config/env');
+const googleIdentity = require('../services/googleIdentity.service');
+
+const googleCookieOptions = () => ({ ...getRefreshCookieOptions(), maxAge: googleIdentity.NONCE_MAX_AGE });
+const googleConfig = asyncHandler(async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!env.GOOGLE_CLIENT_ID) {
+    return res.json(new ApiResponse(200, { enabled: false }, 'Google sign-in is not configured yet'));
+  }
+  const nonce = await googleIdentity.createChallenge();
+  res.cookie(googleIdentity.NONCE_COOKIE, nonce, googleCookieOptions());
+  return res.json(new ApiResponse(200, { enabled: true, clientId: env.GOOGLE_CLIENT_ID, nonce }, 'Google sign-in ready'));
+});
+
+const googleLogin = asyncHandler(async (req, res) => {
+  const result = await authService.googleLogin({ ...req.body, nonce: req.cookies[googleIdentity.NONCE_COOKIE], req });
+  setRefreshCookie(res, result.refreshToken);
+  res.clearCookie(googleIdentity.NONCE_COOKIE, { ...googleCookieOptions(), maxAge: undefined });
+  res.set('Cache-Control', 'no-store');
+  res.json(new ApiResponse(200, { user: result.user, accessToken: result.accessToken }, 'Google login successful'));
+});
 
 const setRefreshCookie = (res, refreshToken) => {
   res.cookie('refreshToken', refreshToken, getRefreshCookieOptions());
@@ -90,6 +111,8 @@ const changePassword = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  googleConfig,
+  googleLogin,
   changePassword,
   login,
   logout,

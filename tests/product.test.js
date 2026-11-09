@@ -8,7 +8,7 @@ jest.mock('../src/config/cloudinary', () => ({
 
 const mongoose = require('mongoose');
 const request = require('supertest');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
 const app = require('../src/app');
 const roles = require('../src/constants/roles');
 const Category = require('../src/models/category.model');
@@ -72,7 +72,7 @@ beforeAll(async () => {
     await mongoose.disconnect();
   }
 
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongoServer.getUri());
   await Promise.all([User.init(), Category.init(), Product.init()]);
 });

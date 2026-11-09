@@ -14,6 +14,10 @@ const envSchema = z
       .min(1, 'MONGODB_URI is required')
       .default('mongodb://127.0.0.1:27017/sifit'),
     FRONTEND_URL: z.url().default('http://localhost:5173'),
+    GOOGLE_CLIENT_ID: z.string().trim().default('').refine(
+      (value) => !value || /^[A-Za-z0-9._-]+\.apps\.googleusercontent\.com$/.test(value),
+      'GOOGLE_CLIENT_ID must be a Google Web OAuth client ID',
+    ),
     JWT_ACCESS_SECRET: z.string().optional(),
     JWT_REFRESH_SECRET: z.string().optional(),
     JWT_ACCESS_EXPIRES_IN: z.string().min(1).default('15m'),
@@ -23,18 +27,21 @@ const envSchema = z
     CLOUDINARY_API_KEY: z.string().optional(),
     CLOUDINARY_API_SECRET: z.string().optional(),
     RESERVATION_EXPIRES_IN_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
-    PAYMENT_PROVIDER: z.enum(['simulator']).default('simulator'),
+    PAYMENT_PROVIDER: z.enum(['simulator', 'payos']).default('simulator'),
+    PAYOS_CLIENT_ID: z.string().trim().default(''),
+    PAYOS_API_KEY: z.string().trim().default(''),
+    PAYOS_CHECKSUM_KEY: z.string().trim().default(''),
     PAYMENT_MODE: z.enum(['sandbox', 'production']).default('sandbox'),
     PAYMENT_WEBHOOK_SECRET: z.string().optional(),
     PAYMENT_RETURN_URL: z.url().default('http://localhost:5173/payment/result'),
     PAYMENT_CANCEL_URL: z.url().default('http://localhost:5173/payment/cancel'),
-    PAYOUT_MODE: z.enum(['simulation', 'production']).default('simulation'),
-    PAYOUT_HOLD_DAYS: z.coerce.number().int().min(0).max(365).default(7),
-    SHIPPING_PROVIDER: z.enum(['simulator']).default('simulator'),
+    PAYOUT_MODE: z.enum(['simulation', 'manual', 'production']).default('manual'),
+    PAYOUT_HOLD_DAYS: z.coerce.number().int().min(0).max(365).default(0),
+    SHIPPING_PROVIDER: z.enum(['simulator', 'manual']).default('manual'),
     SHIPPING_MODE: z.enum(['sandbox', 'production']).default('sandbox'),
     SHIPPING_WEBHOOK_SECRET: z.string().optional(),
     BUYER_PROTECTION_DAYS: z.coerce.number().int().min(0).max(30).default(3),
-    SELLER_VERIFICATION_MODE: z.enum(['simulation', 'production']).default('simulation'),
+    SELLER_VERIFICATION_MODE: z.enum(['simulation', 'manual', 'production']).default('manual'),
     REVIEW_EDIT_WINDOW_DAYS: z.coerce.number().int().min(0).max(365).default(7),
     SOCKET_IO_ENABLED: z
       .enum(['true', 'false'])
@@ -43,8 +50,16 @@ const envSchema = z
     SOCKET_CORS_ORIGIN: z.url().default('http://localhost:5173'),
     CHAT_MAX_MESSAGE_LENGTH: z.coerce.number().int().min(1).max(2000).default(2000),
     CHAT_MAX_MESSAGES_PER_MINUTE: z.coerce.number().int().min(1).max(300).default(30),
+    RATE_LIMIT_READ_PER_MINUTE: z.coerce.number().int().min(1).max(100000).default(600),
+    RATE_LIMIT_WRITE_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(120),
     NOTIFICATION_OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(100),
     NOTIFICATION_OUTBOX_RETRY_LIMIT: z.coerce.number().int().min(1).max(20).default(5),
+    BACKGROUND_JOBS_ENABLED: z.enum(['true', 'false'])
+      .default(process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID ? 'false' : 'true')
+      .transform((value) => value === 'true'),
+    BACKGROUND_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+    BACKGROUND_NOTIFICATION_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(3600).default(15),
+    BACKGROUND_JOB_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(20),
     COMMISSION_RATE: z.coerce.number().min(0).max(100).default(10),
   })
   .superRefine((env, ctx) => {

@@ -4,7 +4,7 @@ const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 
 const submitVerification = asyncHandler(async (req, res) => {
-  const verification = await sellerVerificationService.submitVerification(req.user);
+  const verification = await sellerVerificationService.submitVerification(req.user, req.body);
   res
     .status(201)
     .json(new ApiResponse(httpStatus.CREATED, { verification }, 'Verification submitted'));
@@ -24,6 +24,7 @@ const approve = asyncHandler(async (req, res) => {
     id: req.params.id,
     admin: req.user,
     status: 'VERIFIED',
+    ...req.body,
   });
   res
     .status(200)
@@ -35,6 +36,7 @@ const reject = asyncHandler(async (req, res) => {
     admin: req.user,
     status: 'REJECTED',
     reason: req.body.reason,
+    expectedVersion: req.body.expectedVersion,
   });
   res
     .status(200)

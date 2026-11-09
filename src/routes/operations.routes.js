@@ -41,9 +41,7 @@ router.get('/admin/categories', authenticate, authorize(roles.ADMIN), asyncHandl
   res.json(new ApiResponse(200, { categories: await Category.find().sort({ name: 1 }) }, 'Categories retrieved'));
 }));
 router.get('/products/facets', asyncHandler(async (req, res) => {
-  const query = { status: 'ACTIVE', deletedAt: null };
-  const [brands, sizes] = await Promise.all([Product.distinct('brand', query), Product.distinct('size', query)]);
-  res.json(new ApiResponse(200, { brands: brands.filter(Boolean).sort(), sizes: sizes.filter(Boolean).sort() }, 'Product facets retrieved'));
+  res.json(new ApiResponse(200, await require('../services/product.service').getPublicFacets(), 'Product facets retrieved'));
 }));
 router.get('/seller/reviews', authenticate, authorize(roles.SELLER), validate(z.object({ query: z.object({
   page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(50).default(20),

@@ -2,6 +2,7 @@ const httpStatus = require('../constants/httpStatus');
 const Product = require('../models/product.model');
 const Wishlist = require('../models/wishlist.model');
 const ApiError = require('../utils/ApiError');
+const { visibleSellerIds } = require('./publicSeller.service');
 
 const MAX_WISHLIST_ITEMS = 100;
 
@@ -14,10 +15,11 @@ const getOrCreateWishlist = async (user) => {
   return wishlist;
 };
 
-const availability = (product) => {
+const availability = (product, sellers) => {
   if (
     !product ||
     product.deletedAt ||
+    !sellers.has(String(product.sellerId?._id)) ||
     ['DRAFT', 'PENDING', 'REJECTED', 'ARCHIVED'].includes(product.status)
   )
     return 'UNAVAILABLE';
@@ -32,11 +34,14 @@ const formatWishlist = async (wishlist) => {
     select: 'title price images brand size condition status sellerId deletedAt',
     populate: { path: 'sellerId', select: 'fullName avatar' },
   });
+  const sellers = await visibleSellerIds(
+    wishlist.items.map((item) => item.productId?.sellerId?._id),
+  );
   return {
     id: wishlist.id,
     items: wishlist.items.map((item) => {
       const product = item.productId;
-      const currentAvailability = availability(product);
+      const currentAvailability = availability(product, sellers);
       if (currentAvailability === 'UNAVAILABLE') {
         return {
           productId: product?.id || item.productId,
@@ -73,6 +78,8 @@ const addItem = async (user, productId) => {
   if (!product) throw new ApiError(httpStatus.BAD_REQUEST, 'Product is not available');
   if (product.sellerId.equals(user._id))
     throw new ApiError(httpStatus.FORBIDDEN, 'You cannot wishlist your own product');
+  if (!(await visibleSellerIds([product.sellerId])).has(String(product.sellerId)))
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Product is not available');
   await getOrCreateWishlist(user);
   const updated = await Wishlist.findOneAndUpdate(
     {

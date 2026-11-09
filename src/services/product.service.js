@@ -7,6 +7,8 @@ const SellerProfile = require('../models/sellerProfile.model');
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
 const notificationEventService = require('./notificationEvent.service');
+const { publicSellerStages, visibleSellerIds } = require('./publicSeller.service');
+const mongoose = require('mongoose');
 
 const MAX_IMAGES = 8;
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -67,7 +69,10 @@ const buildPublicQuery = (filters) => {
   if (filters.categoryIds?.length) query.categoryId = { $in: filters.categoryIds };
   if (filters.conditions?.length) query.condition = { $in: filters.conditions };
   if (filters.sizes?.length) query.size = { $in: filters.sizes };
-  if (filters.brands?.length) query.brand = { $in: filters.brands.map(brand => new RegExp(`^${escapeRegex(brand)}$`, 'i')) };
+  if (filters.brands?.length)
+    query.brand = {
+      $in: filters.brands.map((brand) => new RegExp(`^${escapeRegex(brand)}$`, 'i')),
+    };
   if (filters.material) query.description = new RegExp(escapeRegex(filters.material), 'i');
 
   if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
@@ -111,17 +116,67 @@ const findEditableProduct = async (id, user) => {
 
 const listPublicProducts = async (filters) => {
   const { page, limit } = getPagination(filters);
+  const query = buildPublicQuery(filters);
+  if (query.categoryId)
+    query.categoryId = query.categoryId.$in
+      ? { $in: query.categoryId.$in.map((id) => new mongoose.Types.ObjectId(id)) }
+      : new mongoose.Types.ObjectId(query.categoryId);
+  const [result] = await Product.aggregate([
+    { $match: query },
+    ...publicSellerStages(),
+    {
+      $facet: {
+        items: [
+          { $sort: getSort(filters.sort) },
+          { $skip: (page - 1) * limit },
+          { $limit: limit },
+          {
+            $lookup: {
+              from: Category.collection.name,
+              localField: 'categoryId',
+              foreignField: '_id',
+              pipeline: [{ $project: { name: 1, slug: 1 } }],
+              as: 'publicCategory',
+            },
+          },
+          {
+            $set: {
+              sellerId: '$publicSeller',
+              categoryId: { $ifNull: [{ $arrayElemAt: ['$publicCategory', 0] }, null] },
+            },
+          },
+          { $unset: ['publicSeller', 'publicCategory'] },
+        ],
+        count: [{ $count: 'total' }],
+      },
+    },
+  ]);
+  const total = result.count[0]?.total || 0;
+  return {
+    items: result.items,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  };
+};
 
-  return toPaginatedResponse({
-    query: buildPublicQuery(filters),
-    page,
-    limit,
-    sort: getSort(filters.sort),
-    populate: [
-      { path: 'sellerId', select: 'fullName avatar' },
-      { path: 'categoryId', select: 'name slug' },
-    ],
-  });
+const getPublicFacets = async () => {
+  const [result] = await Product.aggregate([
+    { $match: { status: 'ACTIVE', deletedAt: null } },
+    ...publicSellerStages(),
+    {
+      $facet: {
+        brands: [
+          { $match: { brand: { $type: 'string', $ne: '' } } },
+          { $group: { _id: '$brand' } },
+          { $sort: { _id: 1 } },
+        ],
+        sizes: [{ $group: { _id: '$size' } }, { $sort: { _id: 1 } }],
+      },
+    },
+  ]);
+  return {
+    brands: result.brands.map((item) => item._id),
+    sizes: result.sizes.map((item) => item._id).filter(Boolean),
+  };
 };
 
 const getPublicProductById = async (id) => {
@@ -130,7 +185,10 @@ const getPublicProductById = async (id) => {
     select: 'fullName avatar',
   });
 
-  if (!product) {
+  if (
+    !product ||
+    !(await visibleSellerIds([product.sellerId?._id])).has(String(product.sellerId?._id))
+  ) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Product not found');
   }
 
@@ -370,6 +428,7 @@ const deleteImage = async (id, encodedPublicId, user) => {
 };
 
 module.exports = {
+  getPublicFacets,
   createProduct,
   deleteImage,
   getPublicProductById,

@@ -36,6 +36,12 @@ const roles = require('../constants/roles');
 // All seller endpoints, including those mounted by shared routers below.
 router.use('/seller', authenticate, authorize(roles.SELLER));
 router.use('/', require('./operations.routes'));
+router.use('/', require('./marketplaceWorkflow.routes'));
+router.use('/', require('./shopFollow.routes'));
+router.use('/', require('./offer.routes'));
+router.use('/', require('./manualRefund.routes'));
+router.use('/', require('./disputeCase.routes'));
+router.use('/', require('./paymentException.routes'));
 
 router.use('/admin', adminFinanceRoutes);
 router.use('/admin', adminDashboardRoutes);
@@ -54,6 +60,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/orders', orderRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/', productReviewRoutes);
+router.use('/', require('./productReport.routes'));
 router.use('/products', productRoutes);
 router.use('/seller', sellerFinanceRoutes);
 router.use('/seller', sellerOrderRoutes);

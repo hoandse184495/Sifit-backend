@@ -30,10 +30,42 @@ const reviewSchema = z.object({
 });
 const resolveSchema = z.object({
   params: z.object({ id: objectId }),
-  body: z.object({
-    status: z.enum(['RESOLVED_BUYER', 'RESOLVED_SELLER', 'CLOSED']),
-    resolution: z.string().trim().min(1).max(2000),
-  }),
+  body: z
+    .object({
+      status: z.enum(['RESOLVED_BUYER', 'RESOLVED_SELLER', 'CLOSED']),
+      resolution: z.string().trim().min(1).max(2000),
+      expectedVersion: z.number().int().nonnegative().optional(),
+      returnRequired: z.boolean().default(false),
+      returnDetails: z
+        .object({
+          address: z
+            .object({
+              recipientName: z.string().trim().min(2).max(100),
+              phone: z
+                .string()
+                .trim()
+                .regex(/^[0-9+(). -]{8,20}$/),
+              addressLine: z.string().trim().min(5).max(250),
+              ward: z.string().trim().min(2).max(100),
+              province: z.string().trim().min(2).max(100),
+            })
+            .strict(),
+          instructions: z.string().trim().min(10).max(1000),
+          shippingPayer: z.enum(['BUYER', 'SELLER']),
+          shipBy: z.iso.datetime({ offset: true }),
+        })
+        .strict()
+        .optional(),
+    })
+    .refine(
+      (data) =>
+        data.returnRequired
+          ? data.status === 'RESOLVED_BUYER' &&
+            Boolean(data.returnDetails) &&
+            data.expectedVersion !== undefined
+          : !data.returnDetails,
+      'Chọn đầy đủ thông tin trả hàng khi chấp nhận bên mua',
+    ),
 });
 
 const validate = (schema) => (req, res, next) => {

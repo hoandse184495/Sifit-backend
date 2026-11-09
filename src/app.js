@@ -8,7 +8,7 @@ const corsOptions = require('./config/cors');
 const routes = require('./routes');
 const errorHandler = require('./middlewares/error.middleware');
 const notFound = require('./middlewares/notFound.middleware');
-const { apiLimiter } = require('./middlewares/rateLimit.middleware');
+const { apiLimiter, paymentWebhookLimiter } = require('./middlewares/rateLimit.middleware');
 
 const app = express();
 
@@ -24,6 +24,8 @@ if (env.NODE_ENV !== 'test') {
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
 
+// Payment callbacks have a separate budget so buyer polling cannot block bank receipts.
+app.post('/api/v1/webhooks/payments/:provider', paymentWebhookLimiter, require('./controllers/paymentWebhook.controller').handlePaymentWebhook);
 app.use('/api/v1', apiLimiter, routes);
 
 app.use(notFound);

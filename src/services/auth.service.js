@@ -5,6 +5,7 @@ const roles = require('../constants/roles');
 const AuthSession = require('../models/authSession.model');
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
+const googleIdentity = require('./googleIdentity.service');
 const {
   createTokenId,
   getRefreshExpiryDate,
@@ -23,6 +24,8 @@ const safeUser = (user) => ({
   avatar: user.avatar,
   phone: user.phone,
   emailVerified: user.emailVerified,
+  hasPassword: user.authProvider !== 'google',
+  googleLinked: ['google', 'both'].includes(user.authProvider),
   lastLoginAt: user.lastLoginAt,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
@@ -87,7 +90,7 @@ const login = async ({ email, password, req }) => {
   const normalizedEmail = email.toLowerCase();
   const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
 
-  if (!user) {
+  if (!user || !user.passwordHash) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'Invalid email or password');
   }
 
@@ -227,6 +230,10 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'User no longer exists');
   }
 
+  if (!user.passwordHash) {
+    throw new ApiError(httpStatus.CONFLICT, 'This account uses Google sign-in and has no Sifit password');
+  }
+
   const passwordMatches = await argon2.verify(user.passwordHash, currentPassword);
 
   if (!passwordMatches) {
@@ -242,7 +249,54 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
   );
 };
 
+const googleLogin = async ({ credential, role = roles.BUYER, currentPassword, nonce, req }) => {
+  if (![roles.BUYER, roles.SELLER].includes(role)) throw new ApiError(400, 'Invalid registration role');
+  const identity = await googleIdentity.verifyIdentity({ credential, nonce });
+  let user = await User.findOne({ googleId: identity.googleId }).select('+googleId +passwordHash');
+  let needsLink = false;
+  if (!user) {
+    user = await User.findOne({ email: identity.email }).select('+googleId +passwordHash');
+    if (user) {
+      if (user.status === 'SUSPENDED') throw new ApiError(403, 'Account is suspended');
+      if (user.googleId) throw new ApiError(409, 'This account is linked to another Google account');
+      if (!currentPassword) {
+        throw new ApiError(409, 'Confirm your existing Sifit password to link this Google account', [{ code: 'GOOGLE_LINK_REQUIRED' }]);
+      }
+      if (!user.passwordHash || !await argon2.verify(user.passwordHash, currentPassword)) {
+        throw new ApiError(401, 'Invalid current password');
+      }
+      needsLink = true;
+    }
+  }
+  if (user?.status === 'SUSPENDED') throw new ApiError(403, 'Account is suspended');
+  await googleIdentity.consumeChallenge(identity.nonceHash);
+  if (!user) {
+    try {
+      user = await User.create({ fullName: identity.fullName, email: identity.email, googleId: identity.googleId,
+        authProvider: 'google', emailVerified: true, avatar: identity.avatar, role });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      // A competing first login may have created the same identity. Never merge by email here.
+      user = await User.findOne({ googleId: identity.googleId }).select('+googleId +passwordHash');
+      if (!user) throw new ApiError(409, 'An account with this email already exists. Please sign in again to link it.');
+    }
+  } else if (needsLink) {
+    user = await User.findOneAndUpdate(
+      { _id: user._id, googleId: { $exists: false }, status: 'ACTIVE' },
+      { $set: { googleId: identity.googleId, authProvider: 'both', emailVerified: true } },
+      { new: true, runValidators: true },
+    );
+    if (!user) throw new ApiError(409, 'Account changed. Please sign in again.');
+  }
+  if (user.status === 'SUSPENDED') throw new ApiError(403, 'Account is suspended');
+  user.lastLoginAt = new Date();
+  await user.save();
+  const { refreshToken: refresh } = await createRefreshSession({ user, req });
+  return { user: safeUser(user), accessToken: signAccessToken(user), refreshToken: refresh };
+};
+
 module.exports = {
+  googleLogin,
   changePassword,
   getCurrentUser,
   login,

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const request = require('supertest');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { MongoMemoryReplSet } = require('mongodb-memory-server');
 const app = require('../src/app');
 const commissionStatus = require('../src/constants/commissionStatus');
 const orderStatus = require('../src/constants/orderStatus');
@@ -59,7 +59,7 @@ const createOrder = (buyerId, sellerId, overrides = {}) =>
 
 beforeAll(async () => {
   if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
-  mongoServer = await MongoMemoryServer.create();
+  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   await mongoose.connect(mongoServer.getUri());
   await Promise.all([
     User.init(),

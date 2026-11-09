@@ -1,5 +1,7 @@
 const applyValidatedQuery = require('../utils/applyValidatedQuery');
 const { z } = require('zod');
+const { productConditions, productSizes } = require('../models/product.model');
+const { objectId } = require('./common.validation');
 
 const phone = z
   .string()
@@ -19,6 +21,30 @@ const updateProfileSchema = z.object({
   body: profileBody.partial().refine((v) => Object.keys(v).length > 0),
 });
 const slugParamSchema = z.object({ params: z.object({ slug: z.string().trim().min(1).max(120) }) });
+const publicShopSchema = z.object({
+  params: slugParamSchema.shape.params,
+  query: z
+    .object({
+      page: z.coerce.number().int().min(1).max(100000).default(1),
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+      search: z.string().trim().max(100).optional(),
+      categoryId: objectId.optional(),
+      brand: z.string().trim().max(100).optional(),
+      size: z.enum(productSizes).optional(),
+      condition: z.enum(productConditions).optional(),
+      minPrice: z.coerce.number().int().safe().min(0).optional(),
+      maxPrice: z.coerce.number().int().safe().min(0).optional(),
+      sort: z.enum(['newest', 'oldest', 'price_asc', 'price_desc']).default('newest'),
+    })
+    .refine(
+      (value) =>
+        value.minPrice === undefined ||
+        value.maxPrice === undefined ||
+        value.minPrice <= value.maxPrice,
+      { message: 'Minimum price must not exceed maximum price', path: ['maxPrice'] },
+    ),
+});
+const sellerShopSchema = z.object({ params: z.object({ sellerId: objectId }) });
 const listShopSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().min(1).default(1),
@@ -49,6 +75,8 @@ module.exports = {
   createProfileSchema,
   listShopSchema,
   slugParamSchema,
+  publicShopSchema,
+  sellerShopSchema,
   updateProfileSchema,
   validate,
 };
