@@ -1,5 +1,7 @@
 # SIFIT Backend
 
+Deploy the academic demo with one HTTPS domain: [deployment guide](deploy/README.md).
+
 Google sign-in setup and validation: [GOOGLE_SIGNIN.md](GOOGLE_SIGNIN.md).
 
 Local account suspension, concurrent admin safety and independent API rate limits: [SECURITY_FIXES_R1_R3.md](SECURITY_FIXES_R1_R3.md).

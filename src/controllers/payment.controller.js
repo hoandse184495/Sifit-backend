@@ -2,8 +2,13 @@ const httpStatus = require('../constants/httpStatus');
 const paymentService = require('../services/payment.service');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
+const env = require('../config/env');
+const ApiError = require('../utils/ApiError');
 
 const createPayment = asyncHandler(async (req, res) => {
+  if (!env.PAYMENTS_ENABLED) {
+    throw new ApiError(503, 'Thanh toán đang tạm tắt trên bản giới thiệu. Không cần chuyển tiền.');
+  }
   const payment = await paymentService.createPayment({
     buyer: req.user,
     checkoutGroupId: req.body.checkoutGroupId,

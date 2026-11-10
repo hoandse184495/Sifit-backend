@@ -1,4 +1,5 @@
 const dotenv = require('dotenv');
+const { URL } = require('node:url');
 const { z } = require('zod');
 
 dotenv.config({ quiet: true });
@@ -28,6 +29,7 @@ const envSchema = z
     CLOUDINARY_API_SECRET: z.string().optional(),
     RESERVATION_EXPIRES_IN_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
     PAYMENT_PROVIDER: z.enum(['simulator', 'payos']).default('simulator'),
+    PAYMENTS_ENABLED: z.enum(['true', 'false']).default('true').transform(value => value === 'true'),
     PAYOS_CLIENT_ID: z.string().trim().default(''),
     PAYOS_API_KEY: z.string().trim().default(''),
     PAYOS_CHECKSUM_KEY: z.string().trim().default(''),
@@ -65,6 +67,20 @@ const envSchema = z
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'test') {
       return;
+    }
+
+    if (env.NODE_ENV === 'production') {
+      for (const key of ['FRONTEND_URL', 'SOCKET_CORS_ORIGIN']) {
+        let url;
+        try { url = new URL(env[key]); } catch { /* z.url also reports invalid URLs. */ }
+        if (!url || url.protocol !== 'https:' || url.origin !== env[key] || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: 'Use a public HTTPS origin without a path or trailing slash' });
+        }
+      }
+      if (env.PAYMENTS_ENABLED && env.PAYMENT_PROVIDER === 'payos' &&
+        (env.PAYMENT_MODE !== 'production' || !env.PAYOS_CLIENT_ID || !env.PAYOS_API_KEY || !env.PAYOS_CHECKSUM_KEY || !env.PAYOS_WEBHOOK_URL.startsWith('https://'))) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['PAYOS_WEBHOOK_URL'], message: 'Enabled PayOS payments require production mode, credentials and an HTTPS webhook URL' });
+      }
     }
 
     if (!env.JWT_ACCESS_SECRET || env.JWT_ACCESS_SECRET.length < 32) {

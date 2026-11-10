@@ -22,7 +22,9 @@
     "migrate:roles": "node scripts/upgradeRoles.js",
     "migrate:remove-address-district": "node scripts/removeAddressDistrict.js",
     "payos:confirm-webhook": "node scripts/confirmPayosWebhook.js",
-    "payos:webhook-proxy": "node scripts/payosWebhookProxy.js"
+    "payos:webhook-proxy": "node scripts/payosWebhookProxy.js",
+    "db:prepare": "node scripts/prepareDatabase.js",
+    "bootstrap:admin": "node scripts/bootstrapAdmin.js"
   },
   "keywords": [
     "sifit",
