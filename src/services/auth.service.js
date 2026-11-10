@@ -76,12 +76,19 @@ const register = async ({ fullName, email, password, role = roles.BUYER }) => {
   }
 
   const passwordHash = await hashPassword(password);
-  const user = await User.create({
+  const data = {
     fullName,
     email: normalizedEmail,
     passwordHash,
     role,
-  });
+  };
+  const user = require('./mail.service').configured()
+    ? await require('../utils/withTransaction')(async session => {
+      const [created] = await User.create([data], { session });
+      await require('./emailAction.service').issue(created.email, 'verify', { session });
+      return created;
+    })
+    : await User.create(data);
 
   return safeUser(user);
 };
@@ -224,7 +231,7 @@ const getCurrentUser = async (userId) => {
 };
 
 const changePassword = async ({ userId, currentPassword, newPassword }) => {
-  const user = await User.findById(userId).select('+passwordHash');
+  const user = await User.findById(userId).select('+passwordHash +resetVersion');
 
   if (!user) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'User no longer exists');
@@ -241,12 +248,15 @@ const changePassword = async ({ userId, currentPassword, newPassword }) => {
   }
 
   user.passwordHash = await hashPassword(newPassword);
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  user.resetVersion = (user.resetVersion || 0) + 1;
   await user.save();
 
   await AuthSession.updateMany(
     { user: user._id, revokedAt: null },
     { revokedAt: new Date(), revokedReason: 'password_changed' },
   );
+  require('../socket').disconnectUser(user._id, 'Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.');
 };
 
 const googleLogin = async ({ credential, role = roles.BUYER, currentPassword, nonce, req }) => {

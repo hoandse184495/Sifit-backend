@@ -58,7 +58,7 @@ const processBatch = async ({ limit = env.NOTIFICATION_OUTBOX_BATCH_SIZE, eventK
       processed += 1;
     } catch (error) {
       event.status = event.attempts >= env.NOTIFICATION_OUTBOX_RETRY_LIMIT ? 'FAILED' : 'PENDING';
-      event.lastError = error.message;
+      event.lastError = error.name || 'NotificationError';
       event.nextAttemptAt = new Date(Date.now() + Math.min(event.attempts, 5) * 60 * 1000);
     }
 

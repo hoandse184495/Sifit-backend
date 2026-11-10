@@ -15,6 +15,7 @@ const { getPaymentProvider } = require('./paymentProviders/paymentProvider.facto
 const commissionService = require('./commission.service');
 const ledgerService = require('./ledger.service');
 const notificationEventService = require('./notificationEvent.service');
+const incoming = require('./incomingTransfer.service');
 const markException = async (payment, reason, receivedAmount, newReceipts, session) => {
   await Order.updateMany(
     { checkoutGroupId: payment.checkoutGroupId },
@@ -100,6 +101,7 @@ const processSuccessfulPayment = async ({ payment, parsedEvent, webhookEvent }) 
           },
         ];
         for (const receipt of receipts) {
+          await incoming.reserve({ reference: receipt.reference, sourceType: 'PAYOS', sourceId: freshPayment._id, amount: receipt.amount }, session);
           const existing = await PaymentTransaction.findOne({
             provider: 'payos',
             reference: receipt.reference,
@@ -281,7 +283,7 @@ const processSuccessfulPayment = async ({ payment, parsedEvent, webhookEvent }) 
           orderStatus: orderStatus.PENDING_PAYMENT,
           paymentStatus: paymentStatus.UNPAID,
         },
-        { orderStatus: orderStatus.PAID, paymentStatus: paymentStatus.PAID },
+        { orderStatus: orderStatus.PAID, paymentStatus: paymentStatus.PAID, sellerShipBy: new Date(Date.now() + require('../config/env').SELLER_SHIP_DAYS * 86400000) },
         { session },
       );
       if (freshPayment.provider === 'payos')

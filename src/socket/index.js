@@ -67,10 +67,10 @@ const initSocket = (server) => {
 };
 
 const getIo = () => io;
-const disconnectUser = (userId) => {
+const disconnectUser = (userId, message) => {
   if (!io) return;
   io.in(userRoom(userId)).emit('account:suspended', {
-    message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.',
+    message: message || 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.',
   });
   io.in(userRoom(userId)).disconnectSockets(true);
 };

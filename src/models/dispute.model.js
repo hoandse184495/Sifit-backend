@@ -61,6 +61,8 @@ const disputeSchema = new mongoose.Schema(
       },
     },
     openedAt: { type: Date, default: Date.now },
+    reviewBy: { type: Date, index: true },
+    deadlineEscalatedAt: Date,
     resolvedAt: Date,
     resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     resolution: { type: String, trim: true },

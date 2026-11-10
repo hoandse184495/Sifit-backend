@@ -25,6 +25,8 @@ const preferenceByType = {
 };
 
 const criticalTypes = new Set([
+  'DEADLINE_REMINDER',
+  'SELLER_RECOVERY',
   'SELLER_VERIFICATION_UPDATED',
   'PAYMENT_REVIEW_UPDATED',
   'DISPUTE_UPDATED',

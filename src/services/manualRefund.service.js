@@ -103,16 +103,7 @@ const assertFunds = async (payment, session) => {
     throw new ApiError(409, 'Biên nhận ngân hàng chưa khớp số tiền thanh toán.');
 };
 const assertUnpaidPayout = async (orderId, session) => {
-  if (
-    await Payout.exists({
-      orderIds: orderId,
-      status: { $in: ['APPROVED', 'PROCESSING', 'PAID'] },
-    }).session(session)
-  )
-    throw new ApiError(
-      409,
-      'Khoản chi người bán đã được duyệt hoặc đã chuyển; cần đối soát thu hồi trước khi hoàn.',
-    );
+  return require('./sellerRecovery.service').assertFunded(orderId, session);
 };
 const notifyBuyer = (refund, actor, session, stage, body) =>
   events.enqueueNotificationEvent(
@@ -171,7 +162,7 @@ const create = (admin, data) =>
       throw new ApiError(409, 'Đơn hàng không thuộc thanh toán đã chọn.');
     assertAdmin(admin, order);
     await assertFunds(payment, session);
-    await assertUnpaidPayout(order._id, session);
+    const recovery = await require('./sellerRecovery.service').assertFunded(order._id, session, data);
     if (
       !['PAID', 'REFUND_PENDING'].includes(order.paymentStatus) ||
       order.refundPendingAmount > 0 ||
@@ -182,7 +173,7 @@ const create = (admin, data) =>
       }).session(session))
     )
       throw new ApiError(409, 'Đơn chưa được thanh toán hoặc đang có khoản hoàn chờ xử lý.');
-    if (!(await Commission.exists({ orderId: order._id, status: 'PENDING' }).session(session)))
+    if (!(await Commission.exists({ orderId: order._id, status: recovery ? { $in: ['PENDING', 'RECOGNIZED'] } : 'PENDING' }).session(session)))
       throw new ApiError(
         409,
         'Hoa hồng đã quyết toán hoặc chưa được ghi nhận, cần đối soát trước.',
@@ -236,6 +227,7 @@ const create = (admin, data) =>
       { session },
     );
     order.refundPendingAmount = data.amount;
+    if (recovery) await require('../models/sellerRecovery.model').updateOne({ _id: recovery._id }, { $set: { refundId: refund._id } }, { session });
     order.paymentStatus = 'REFUND_PENDING';
     payment.refundReservedAmount = (payment.refundReservedAmount || 0) + data.amount;
     await order.save({ session });
@@ -529,7 +521,7 @@ const complete = (admin, id, data) =>
     const order = await lockOrder(refund.orderId, session);
     await assertFunds(payment, session);
     await assertReturnSatisfied(refund.orderId, session);
-    await assertUnpaidPayout(refund.orderId, session);
+    const recovery = await require('./sellerRecovery.service').assertFunded(refund.orderId, session, { amount: refund.amount, disputeId: refund.disputeId });
     if (
       !order ||
       order.refundPendingAmount !== refund.amount ||
@@ -538,11 +530,12 @@ const complete = (admin, id, data) =>
       (payment.refundedAmount || 0) + refund.amount > payment.amount
     )
       throw new ApiError(409, 'Số dư hoàn không khớp, cần đối soát.');
-    const commission = await Commission.findOne({ orderId: order._id, status: 'PENDING' }).session(
+    const commission = await Commission.findOne({ orderId: order._id, status: recovery ? { $in: ['PENDING', 'RECOGNIZED'] } : 'PENDING' }).session(
       session,
     );
     if (!commission || order.buyerTotal < order.sellerProceeds + order.commissionAmount)
       throw new ApiError(409, 'Hoa hồng/số dư đơn chưa sẵn sàng để hoàn.');
+    const recognizedCommission = commission.status === 'RECOGNIZED';
     const cumulative = (order.refundedAmount || 0) + refund.amount;
     const merchandiseTotal = order.sellerProceeds + order.commissionAmount;
     const shippingTotal = proportional(
@@ -640,14 +633,14 @@ const complete = (admin, id, data) =>
     await refund.save({ session });
     const lines = [
       {
-        account: 'seller_liability',
+        account: recovery ? 'seller_recovery_clearing' : 'seller_liability',
         partyId: order.sellerId,
         debit: sellerPart,
         credit: 0,
         currency: 'VND',
       },
       {
-        account: 'platform_commission_revenue_pending',
+        account: recognizedCommission ? 'platform_commission_revenue' : 'platform_commission_revenue_pending',
         debit: commissionPart,
         credit: 0,
         currency: 'VND',
@@ -667,6 +660,7 @@ const complete = (admin, id, data) =>
       },
       session,
     );
+    if (recovery) await require('../models/sellerRecovery.model').updateOne({ _id: recovery._id, status: 'FUNDED', refundId: refund._id }, { $set: { status: 'REFUNDED' } }, { session });
     await recordAudit(admin, refund, 'REFUND_TRANSFER_RECORDED', session, {
       reference: data.reference,
       allocation: refund.allocation,

@@ -24,9 +24,11 @@ const socketAuth = async (socket, next) => {
 
     const user = await User.findById(payload.sub);
     if (!user) throw new ApiError(401, 'User no longer exists');
+    if ((payload.version || 0) !== (user.tokenVersion || 0)) throw new ApiError(401, 'Password changed. Please log in again');
     if (user.status === 'SUSPENDED') throw new ApiError(403, 'Account is suspended');
 
     socket.user = user;
+    socket.data.tokenVersion = payload.version || 0;
     return next();
   } catch (error) {
     return next(error);

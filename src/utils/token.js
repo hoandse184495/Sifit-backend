@@ -33,6 +33,7 @@ const signAccessToken = (user) =>
       sub: user.id,
       role: user.role,
       type: 'access',
+      version: user.tokenVersion || 0,
     },
     env.JWT_ACCESS_SECRET,
     {

@@ -511,3 +511,55 @@ describe('Manual PayOS refund workflow', () => {
     await call('post', '/admin/manual-refunds').send(body()).expect(403);
   });
 });
+
+describe('Recovery after seller payout', () => {
+  const setup = async () => {
+    const payout = await Payout.create({ sellerId: seller._id, orderIds: [orders[0]._id], amount: 90000, status: 'PAID', provider: 'manual', completedAt: new Date(Date.now() - 3600000), idempotencyKey: crypto.randomUUID() });
+    await Commission.updateOne({ orderId: orders[0]._id }, { status: 'RECOGNIZED' });
+    const result = await call('post', `/admin/orders/${orders[0]._id}/post-payout-dispute`).send({ reason: 'Verified complaint received after the payout' }).expect(200);
+    const dispute = result.body.data.dispute;
+    await require('../src/services/dispute.service').resolveDispute(dispute._id, admin, { status: 'RESOLVED_BUYER', resolution: 'Full buyer refund after independent evidence review', expectedVersion: dispute.contentVersion });
+    const recovery = (await call('post', '/admin/recoveries').send({ orderId: orders[0].id, reason: 'Recover seller proceeds before refunding buyer' }).expect(200)).body.data.recovery;
+    return { payout, dispute, recovery };
+  };
+  const receipt = (recovery, data) => call('post', `/admin/recoveries/${recovery._id}/receipts`)
+    .field('amount', String(data.amount)).field('reference', data.reference).field('receivedAt', data.receivedAt)
+    .field('note', 'Independently verified bank statement for repayment').field('confirmed', 'true').attach('proof', png, 'repayment.png');
+  it('requires verified repayments, then refunds with correct ledger accounts without rewriting a paid payout', async () => {
+    const { payout, dispute, recovery } = await setup();
+    const refundData = { ...body(100000), disputeId: dispute._id };
+    await call('post', '/admin/manual-refunds').send(refundData).expect(409);
+    await receipt(recovery, { amount: 60000, reference: 'RECOVERY-A', receivedAt: new Date().toISOString() }).expect(200);
+    await call('post', '/admin/manual-refunds').send(refundData).expect(409);
+    await receipt(recovery, { amount: 30000, reference: 'RECOVERY-B', receivedAt: new Date().toISOString() }).expect(200);
+    const refund = await create(refundData); await ready(refund); await finish(refund);
+    const saved = await Payout.findById(payout._id); expect(saved.status).toBe('PAID'); expect(saved.amount).toBe(90000);
+    expect((await require('../src/models/sellerRecovery.model').findById(recovery._id)).status).toBe('REFUNDED');
+    const entry = await Ledger.findOne({ sourceEventKey: `refund:${refund._id}:transferred` });
+    expect(entry.lines.find(line => line.account === 'seller_recovery_clearing').debit).toBe(90000);
+    expect(entry.lines.find(line => line.account === 'platform_commission_revenue').debit).toBe(10000);
+    expect((await Dispute.findById(dispute._id)).refundSettledAt).toBeTruthy();
+    expect((await Order.findById(orders[1]._id)).paymentStatus).toBe('PAID');
+  });
+  it('guards receipt replay, over-collection, private proofs and the original payment reference', async () => {
+    const { recovery } = await setup();
+    const data = { amount: 40000, reference: 'UNIQUE-RECOVERY', receivedAt: new Date().toISOString() };
+    await receipt(recovery, data).expect(200); await receipt(recovery, data).expect(200);
+    await expect(require('../src/services/incomingTransfer.service').reserve({ reference: 'unique-recovery', sourceType: 'PAYOS', sourceId: payment.id, amount: 40000 })).rejects.toMatchObject({ statusCode: 409 });
+    expect(await require('../src/models/recoveryReceipt.model').countDocuments()).toBe(1);
+    await receipt(recovery, { ...data, amount: 41000 }).expect(409);
+    await receipt(recovery, { ...data, reference: 'SECOND', amount: 60000 }).expect(409);
+    await receipt(recovery, { ...data, reference: 'INCOMING-12345', amount: 1 }).expect(409);
+    const proof = await require('../src/models/recoveryReceipt.model').findOne();
+    await call('get', `/seller/recoveries/${recovery._id}/receipts/${proof._id}/proof`, seller).expect(200);
+    await call('get', `/seller/recoveries/${recovery._id}/receipts/${proof._id}/proof`, seller2).expect(404);
+    const detail = await call('get', `/admin/recoveries/${recovery._id}`).expect(200);
+    expect(JSON.stringify(detail.body)).not.toContain(png.toString('base64'));
+  });
+  it('blocks self-interested admins and requires a decided dispute before recovery', async () => {
+    await call('post', `/admin/orders/${orders[0]._id}/post-payout-dispute`, buyer).send({ reason: 'A buyer cannot bypass the protected dispute policy' }).expect(403);
+    await call('post', '/admin/recoveries').send({ orderId: orders[0].id, reason: 'No paid payout or dispute yet' }).expect(409);
+    await Order.updateOne({ _id: orders[0]._id }, { sellerId: admin._id });
+    await call('post', `/admin/orders/${orders[0]._id}/post-payout-dispute`).send({ reason: 'Self-interested administrator cannot open a case' }).expect(403);
+  });
+});

@@ -15,6 +15,8 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: [
+        'DEADLINE_REMINDER',
+        'SELLER_RECOVERY',
         'PRODUCT_SUBMITTED',
         'PRODUCT_APPROVED',
         'FOLLOWED_SHOP_NEW_PRODUCT',

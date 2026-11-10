@@ -36,6 +36,9 @@ const roles = require('../constants/roles');
 // All seller endpoints, including those mounted by shared routers below.
 router.use('/seller', authenticate, authorize(roles.SELLER));
 router.use('/', require('./operations.routes'));
+router.use('/', require('./emailAction.routes'));
+router.use('/', require('./operationsHealth.routes'));
+router.use('/', require('./sellerRecovery.routes'));
 router.use('/', require('./marketplaceWorkflow.routes'));
 router.use('/', require('./shopFollow.routes'));
 router.use('/', require('./offer.routes'));

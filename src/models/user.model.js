@@ -49,6 +49,9 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    tokenVersion: { type: Number, default: 0 },
+    resetVersion: { type: Number, default: 0, select: false },
+    verificationVersion: { type: Number, default: 0, select: false },
     lastLoginAt: {
       type: Date,
     },

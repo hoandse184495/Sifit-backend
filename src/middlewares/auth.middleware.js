@@ -29,6 +29,9 @@ const authenticate = asyncHandler(async (req, res, next) => {
   if (!user) {
     throw new ApiError(httpStatus.UNAUTHORIZED, 'User no longer exists');
   }
+  if ((payload.version || 0) !== (user.tokenVersion || 0)) {
+    throw new ApiError(401, 'Password changed. Please log in again');
+  }
 
   if (user.status === 'SUSPENDED') {
     throw new ApiError(httpStatus.FORBIDDEN, 'Account is suspended');

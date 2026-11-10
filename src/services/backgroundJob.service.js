@@ -139,12 +139,17 @@ const startBackgroundJobs = () => {
         payments: await payments.expirePendingPayments({ limit }),
         reservations: await reservations.expireReservations({ limit }),
         offers: await require('./offer.service').expireOffers({ limit }),
+        deadlines: await require('./deadline.service').run({ limit }),
       }),
     },
     {
       name: 'notification-outbox',
       intervalMs: env.BACKGROUND_NOTIFICATION_INTERVAL_SECONDS * 1000,
       run: () => notifications.processBatch(),
+    },
+    {
+      name: 'email-delivery', intervalMs: env.BACKGROUND_NOTIFICATION_INTERVAL_SECONDS * 1000,
+      run: () => require('./mail.service').processBatch({ limit }),
     },
   ]);
 };

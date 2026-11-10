@@ -4,9 +4,7 @@ const logger = require('../utils/logger');
 const run = async () => {
   await connectDatabase();
   try {
-    logger.info(
-      'Dispute deadline worker completed. No automatic dispute closure policy is enabled yet.',
-    );
+    logger.info('Deadline worker completed', await require('../services/deadline.service').run());
   } finally {
     await disconnectDatabase();
   }

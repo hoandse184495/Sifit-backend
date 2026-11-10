@@ -44,6 +44,7 @@ const openDispute = async (orderId, user, data) => {
           orderId,
           buyerId: order.buyerId,
           sellerId: order.sellerId,
+          reviewBy: new Date(Date.now() + require('../config/env').DISPUTE_REVIEW_DAYS * 86400000),
         },
       ],
       { session },

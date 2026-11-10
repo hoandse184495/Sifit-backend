@@ -329,7 +329,7 @@ it('starts jobs with real API processes, shares leases and shuts down without le
     await until(async () => (await Notification.countDocuments({ type: 'ORDER_CANCELLED' })) === 2);
     expect((await Order.findById(expired.order._id)).orderStatus).toBe('CANCELLED');
     expect(await Notification.countDocuments({ eventKey: 'failed-before-restart' })).toBe(1);
-    expect(await BackgroundJob.countDocuments()).toBe(2);
+    expect(await BackgroundJob.countDocuments()).toBe(3);
     for (const state of processes) {
       state.child.send('shutdown');
       await until(() => state.exited);

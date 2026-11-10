@@ -3,6 +3,7 @@ const ApiError = require('../utils/ApiError');
 const refreshSocketUser = async (socket) => {
   const user = await User.findOne({ _id: socket.user?._id, status: 'ACTIVE' });
   if (!user) throw new ApiError(403, 'Tài khoản đã bị khóa hoặc không còn khả dụng.');
+  if ((socket.data?.tokenVersion || 0) !== (user.tokenVersion || 0)) throw new ApiError(403, 'Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.');
   socket.user = user;
   return user;
 };

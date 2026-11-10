@@ -133,6 +133,9 @@ const orderSchema = new mongoose.Schema(
     refundedSellerProceeds: { type: Number, default: 0, min: 0 },
     refundedCommissionAmount: { type: Number, default: 0, min: 0 },
     sellerAcceptedAt: Date,
+    sellerShipBy: { type: Date, index: true },
+    fulfillmentReminderAt: Date,
+    fulfillmentOverdueAt: Date,
     cancellationReason: {
       type: String,
       trim: true,

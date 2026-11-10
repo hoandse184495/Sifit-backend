@@ -1,0 +1,15 @@
+const express = require('express');
+const { z } = require('zod');
+const authenticate = require('../middlewares/auth.middleware');
+const authorize = require('../middlewares/authorize.middleware');
+const asyncHandler = require('../utils/asyncHandler');
+const { validate, objectId, pagination } = require('../validations/common.validation');
+const service = require('../services/operationsHealth.service');
+const router = express.Router();
+const send = action => asyncHandler(async (req, res) => res.json({ success: true, data: await action(req) }));
+router.get('/admin/operations/health', authenticate, authorize('ADMIN'), send(() => service.summary()));
+router.get('/admin/operations/:kind', authenticate, authorize('ADMIN'), validate(z.object({ params: z.object({ kind: z.enum(['outbox', 'mail', 'orders', 'disputes']) }), query: z.object({ ...pagination, status: z.enum(['failed', 'all']).default('failed') }) })), send(req => service.list(req.params.kind, req.query, req.user)));
+router.get('/seller/overdue-orders', authenticate, authorize('SELLER'), validate(z.object({ query: z.object(pagination) })), send(req => service.list('orders', req.query, req.user)));
+router.post('/admin/operations/:kind/:id/retry', authenticate, authorize('ADMIN'), validate(z.object({ params: z.object({ kind: z.enum(['outbox', 'mail']), id: objectId }), body: z.object({ reason: z.string().trim().min(5).max(1000) }) })), send(req => service.retry(req.user, req.params.kind, req.params.id, req.body.reason)));
+router.post('/admin/jobs/:id/retry', authenticate, authorize('ADMIN'), validate(z.object({ params: z.object({ id: z.enum(['marketplace-maintenance', 'notification-outbox', 'email-delivery']) }), body: z.object({ reason: z.string().trim().min(5).max(1000) }) })), send(req => service.retryJob(req.user, req.params.id, req.body.reason)));
+module.exports = router;
