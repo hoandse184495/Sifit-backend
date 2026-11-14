@@ -27,6 +27,7 @@ const sellerRatingRoutes = require('./sellerRating.routes');
 const sellerVerificationRoutes = require('./sellerVerification.routes');
 const shippingRoutes = require('./shipping.routes');
 const wishlistRoutes = require('./wishlist.routes');
+const aiStylistRoutes = require('./aiStylist.routes');
 
 const router = express.Router();
 const authenticate = require('../middlewares/auth.middleware');
@@ -74,6 +75,7 @@ router.use('/', sellerProfileRoutes);
 router.use('/', sellerVerificationRoutes);
 router.use('/', shippingRoutes);
 router.use('/wishlist', wishlistRoutes);
+router.use('/ai-stylist', aiStylistRoutes);
 router.use('/webhooks', paymentWebhookRoutes);
 
 module.exports = router;
