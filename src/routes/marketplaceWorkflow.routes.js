@@ -15,6 +15,7 @@ const {
   validate,
 } = require('../validations/marketplaceWorkflow.validation');
 const router = express.Router();
+const financeFilters = require('../validations/financeFilters');
 const route = (method, path, role, schema, key, action) =>
   router[method](
     path,
@@ -39,16 +40,17 @@ route(
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(50).default(20),
       status: z.enum(['MATCHED', 'UNMATCHED']).optional(),
-    }),
+      ...financeFilters.fields,
+    }).refine(financeFilters.validRange, 'Start date must not be after end date'),
   }),
   null,
   async (req) => {
     const Model = require('../models/paymentTransaction.model');
     const { page, limit, status } = req.query;
-    const filter = status ? { status } : {};
+    const filter = { ...(status ? { status } : {}), ...financeFilters.dateFilter(req.query, 'occurredAt'), ...financeFilters.searchFilter(req.query.search, ['reference', 'merchantReference', 'providerPaymentId']) };
     const [items, total] = await Promise.all([
       Model.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ occurredAt: -1, _id: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
       Model.countDocuments(filter),

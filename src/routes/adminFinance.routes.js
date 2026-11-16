@@ -18,6 +18,7 @@ const router = express.Router();
 router.use(authenticate, authorize(roles.ADMIN));
 
 router.get('/payments', validatePayment(adminListSchema), adminFinanceController.listPayments);
+router.get('/ledger', validatePayment(adminListSchema), adminFinanceController.listLedger);
 router.get(
   '/commissions',
   validatePayment(adminListSchema),

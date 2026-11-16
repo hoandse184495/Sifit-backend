@@ -12,6 +12,8 @@ const preferenceByType = {
   PRODUCT_APPROVED: 'productNotifications',
   PRODUCT_REJECTED: 'productNotifications',
   ORDER_CREATED: 'orderNotifications',
+  ORDER_ACCEPTED: 'orderNotifications',
+  ORDER_COMPLETED: 'orderNotifications',
   OFFER_UPDATED: 'orderNotifications',
   ORDER_CANCELLED: 'orderNotifications',
   SHIPMENT_CREATED: 'shippingNotifications',
@@ -54,7 +56,7 @@ const listNotifications = async (user, { page = 1, limit = 20, isRead }) => {
   if (isRead !== undefined) query.isRead = isRead;
   const [items, total] = await Promise.all([
     Notification.find(query)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
     Notification.countDocuments(query),
@@ -105,8 +107,9 @@ const markAllRead = async (user) => {
     { recipientId: user._id, isRead: false, deletedAt: null },
     { isRead: true, readAt: new Date() },
   );
-  getSocket().emitToUser(user._id, 'notification:count', { unreadCount: 0 });
-  return { unreadCount: 0 };
+  const count = await unreadCount(user);
+  getSocket().emitToUser(user._id, 'notification:count', { unreadCount: count });
+  return { unreadCount: count };
 };
 
 const archiveNotification = async (user, id) => {

@@ -1,5 +1,6 @@
 const applyValidatedQuery = require('../utils/applyValidatedQuery');
 const { z } = require('zod');
+const finance = require('./financeFilters');
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid id');
 const pagination = {
@@ -20,7 +21,7 @@ const idParamSchema = z.object({
 });
 
 const adminListSchema = z.object({
-  query: z.object({ ...pagination, checkoutGroupId: objectId.optional() }),
+  query: z.object({ ...pagination, ...finance.fields, checkoutGroupId: objectId.optional() }).refine(finance.validRange, 'Start date must not be after end date'),
 });
 
 const validate = (schema) => (req, res, next) => {

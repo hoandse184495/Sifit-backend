@@ -7,6 +7,7 @@ const payoutService = require('../services/payout.service');
 const refundService = require('../services/refund.service');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
+const { dateFilter, searchFilter } = require('../validations/financeFilters');
 
 const paginate = async (model, query, { page = 1, limit = 20 }) => {
   const [items, total] = await Promise.all([
@@ -21,11 +22,16 @@ const paginate = async (model, query, { page = 1, limit = 20 }) => {
 };
 
 const listPayments = asyncHandler(async (req, res) => {
-  const query = req.query.status ? { status: req.query.status } : {};
+  const query = { ...(req.query.status ? { status: req.query.status } : {}), ...dateFilter(req.query), ...searchFilter(req.query.search, ['merchantReference', 'providerPaymentId']) };
   if (req.query.checkoutGroupId) query.checkoutGroupId = req.query.checkoutGroupId;
   const result = await paginate(Payment, query, req.query);
   const response = new ApiResponse(httpStatus.OK, result, 'Payments retrieved');
   res.status(response.statusCode).json(response);
+});
+
+const listLedger = asyncHandler(async (req, res) => {
+  const query = { ...dateFilter(req.query), ...searchFilter(req.query.search, ['sourceId', 'sourceEventKey', 'description']) };
+  res.json(new ApiResponse(httpStatus.OK, await paginate(LedgerEntry, query, req.query), 'Ledger retrieved'));
 });
 
 const listCommissions = asyncHandler(async (req, res) => {
@@ -89,6 +95,7 @@ module.exports = {
   getPayout,
   listCommissions,
   listPayments,
+  listLedger,
   listPayouts,
   requestRefund,
 };
