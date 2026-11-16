@@ -32,7 +32,7 @@ const createProductSchema = z.object({
 });
 
 const updateProductSchema = z.object({
-  body: productBody.partial().refine((value) => Object.keys(value).length > 0, {
+  body: productBody.partial().extend({ imageOrder: z.array(z.string().min(1)).min(1).max(8).optional() }).refine((value) => Object.keys(value).length > 0, {
     message: 'At least one field is required',
   }),
   params: z.object({

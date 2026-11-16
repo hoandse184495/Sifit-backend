@@ -21,6 +21,7 @@ const summary = job => ({
   id: job.id, status: job.status, engine: job.engine, products: job.products,
   cost: job.cost, step: job.step, totalSteps: stepCount(job),
   phase: job.phase, error: job.error, createdAt: job.createdAt, expiresAt: job.expiresAt,
+  estimatedSeconds: job.estimatedSeconds || 40, completedAt: job.completedAt,
 });
 async function counters(userId) {
   const { periods } = await quotaModule();
@@ -66,7 +67,11 @@ async function create(userId, input, file) {
   if (new Set(products.map(p => p.category)).size !== products.length) throw new ApiError(400, 'Mỗi lượt chọn tối đa một món trong mỗi nhóm trang phục.');
   const { settingsForProduct, garmentCategory } = await settingsModule();
   if (products.some(p => garmentCategory(p) === 'one-pieces') && products.some(p => ['Tops', 'Bottoms'].includes(p.category) && garmentCategory(p) !== 'one-pieces')) throw new ApiError(400, 'Hãy thử váy liền riêng với áo hoặc quần.');
-  const cost = input.engine === 'outfit' ? 2 : products.reduce((sum, p) => sum + settingsForProduct(p, input.engine).credits, 0);
+  const cost = input.engine === 'outfit' ? products.length : products.reduce((sum, p) => sum + settingsForProduct(p, input.engine).credits, 0);
+  const providerCost = input.engine === 'outfit' ? 2 : cost;
+  const recent = await Job.find({ userId, engine: input.engine, status: 'completed', completedAt: { $exists: true } }).sort({ completedAt: -1 }).limit(10).lean();
+  const durations = recent.filter(j => Math.abs(j.products.length - products.length) <= 1).map(j => (j.completedAt - j.createdAt) / 1000).filter(n => n >= 10 && n <= 240).sort((a, b) => a - b);
+  const estimatedSeconds = durations.length ? Math.round(durations[Math.floor(durations.length / 2)]) : 40 + Math.max(0, products.length - 2) * 5;
   let photo;
   try { photo = await sharp(file.buffer, { limitInputPixels: 25000000 }).rotate().resize({ width: 1080, height: 1620, fit: 'inside', withoutEnlargement: true }).flatten({ background: '#fff' }).jpeg({ quality: 90 }).toBuffer(); }
   catch { throw new ApiError(400, 'Không đọc được ảnh. Hãy chọn ảnh khác rõ toàn thân.'); }
@@ -77,10 +82,11 @@ async function create(userId, input, file) {
   try {
     await mongoose.connection.transaction(async session => {
       for (const item of limits) {
-        const updated = await Budget.updateOne({ _id: item.id, used: { $lte: item.limit - cost } }, { $inc: { used: cost } }, { session });
+        const charge = item.id.startsWith('global:') ? providerCost : cost;
+        const updated = await Budget.updateOne({ _id: item.id, used: { $lte: item.limit - charge } }, { $inc: { used: charge } }, { session });
         if (!updated.modifiedCount) throw new ApiError(429, 'Không đủ lượt còn lại. Hạn mức là 5 credit/ngày, 10 credit/tháng và ngân sách chung.');
       }
-      [job] = await Job.create([{ userId, requestId: input.requestId, products, engine: input.engine, cost, photo, seed: randomInt(0, 2147483647), counterIds: limits.map(x => x.id), consentAt: new Date() }], { session });
+      [job] = await Job.create([{ userId, requestId: input.requestId, products, engine: input.engine, cost, providerCost, estimatedSeconds, photo, seed: randomInt(0, 2147483647), counterIds: limits.map(x => x.id), consentAt: new Date() }], { session });
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -113,7 +119,10 @@ async function fail(job, message, confirmed) {
   const refund = stepSettings(job).slice(job.step).reduce((sum, setting) => sum + setting.credits, 0);
   await mongoose.connection.transaction(async session => {
     const update = await Job.updateOne({ _id: job._id, refunded: false, status: { $ne: 'completed' } }, { status: 'failed', active: false, phase: 'failed', error: message, refunded: true, $unset: { photo: 1 } }, { session });
-    if (update.modifiedCount) for (const id of job.counterIds) await Budget.updateOne({ _id: id }, { $inc: { used: -refund } }, { session });
+    if (update.modifiedCount) for (const id of job.counterIds) {
+      const amount = job.engine === 'outfit' ? (id.startsWith('global:') ? job.providerCost ?? 2 : job.cost) : refund;
+      await Budget.updateOne({ _id: id }, { $inc: { used: -amount } }, { session });
+    }
   });
 }
 async function advance(job) {
@@ -147,7 +156,7 @@ async function poll(job) {
   if (typeof value !== 'string' || !/^data:image\/(png|jpeg);base64,/.test(value) || value.length > 20 * 1024 * 1024) return fail(job, 'Kết quả AI chưa đọc được. Vui lòng liên hệ hỗ trợ để kiểm tra lượt đã thực hiện.', false);
   const output = await sharp(Buffer.from(value.slice(value.indexOf(',') + 1), 'base64'), { limitInputPixels: 25000000 }).resize({ width: 1440, height: 2160, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 92 }).toBuffer();
   const finished = job.step + 1 === stepCount(job);
-  const update = { output, step: job.step + 1, status: finished ? 'completed' : 'running', phase: finished ? 'completed' : 'queued', active: !finished, $unset: { predictionId: 1, ...(finished ? { photo: 1 } : {}) } };
+  const update = { output, step: job.step + 1, status: finished ? 'completed' : 'running', phase: finished ? 'completed' : 'queued', active: !finished, ...(finished ? { completedAt: new Date() } : {}), $unset: { predictionId: 1, ...(finished ? { photo: 1 } : {}) } };
   await Job.updateOne({ _id: job._id, predictionId: job.predictionId, step: job.step }, update);
 }
 async function get(userId, id) {

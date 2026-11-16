@@ -232,6 +232,14 @@ const listMyProducts = async (user, filters) => {
 const updateProduct = async (id, data, user) => {
   const product = await findEditableProduct(id, user);
 
+  if (data.imageOrder) {
+    const order = data.imageOrder;
+    if (order.length !== product.images.length || new Set(order).size !== order.length || order.some(id => !product.images.some(image => image.publicId === id))) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Thứ tự ảnh phải bao gồm đúng các ảnh hiện có của sản phẩm.');
+    }
+    product.images = order.map(id => product.images.find(image => image.publicId === id));
+  }
+
   if (data.categoryId) {
     await ensureActiveCategory(data.categoryId);
   }

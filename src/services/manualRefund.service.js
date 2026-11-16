@@ -246,7 +246,7 @@ const create = (admin, data) =>
 const saveBank = (buyer, id, bank) =>
   transaction(async (session) => {
     const refund = await lockRefund(id, session);
-    if (buyer.role !== 'BUYER' || String(refund.buyerId) !== String(buyer._id))
+    if (!['BUYER', 'SELLER'].includes(buyer.role) || String(refund.buyerId) !== String(buyer._id))
       throw new ApiError(404, 'Không tìm thấy khoản hoàn của bạn.');
     if (!['REQUESTED', 'PENDING'].includes(refund.status))
       throw new ApiError(409, 'Tài khoản đã được chốt để chuyển tiền, không thể sửa.');

@@ -72,12 +72,13 @@ beforeEach(async () => {
   ]);
   category = await Category.create({ name: 'Áo', slug: 'ao' });
 });
-it('requires a buyer login and strict ownership/validation; private follow lists never leak', async () => {
+it('allows members to follow other shops with strict ownership and private follow lists', async () => {
   await request(app).put(`/api/v1/shops/${shop.id}/follow`).send({}).expect(401);
-  for (const user of [seller, admin]) {
-    await follow(shop, user).expect(403);
-    await api('get', '/shop-follows/my', user).expect(403);
-  }
+  await follow(shop, seller).expect(403);
+  await follow(shop, admin).expect(403);
+  await api('get', '/shop-follows/my', admin).expect(403);
+  await api('get', '/shop-follows/my', seller).expect(200);
+  await follow(shop, seller2).expect(200);
   await follow(shop, buyer, { buyerId: other.id }).expect(400);
   await follow(shop, buyer, { notifyNewProducts: 'true' }).expect(400);
   await api('put', '/shops/bad/follow').send({}).expect(400);

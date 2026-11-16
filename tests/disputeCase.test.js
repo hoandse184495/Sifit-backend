@@ -371,7 +371,7 @@ describe('Return before refund', () => {
   it('enforces buyer/seller/admin roles, timestamps and safe tracking links', async () => {
     expect((await shipment()).status).toBe(409);
     expect((await requireReturn()).status).toBe(200);
-    await call('post', path('return-shipment'), seller).send({}).expect(403);
+    await call('post', path('return-shipment'), seller).send({ expectedVersion: await version(), carrierName: 'Fixture Carrier', trackingNumber: 'RETURN-123456', shippedAt: new Date().toISOString(), note: 'Parcel handed to return carrier' }).expect(403);
     expect(
       (await shipment({ shippedAt: new Date(Date.now() + 86400000).toISOString() })).status,
     ).toBe(400);

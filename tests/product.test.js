@@ -89,6 +89,20 @@ beforeEach(async () => {
 });
 
 describe('Product API', () => {
+  it('persists image order and cover while rejecting duplicates, foreign images and other owners', async () => {
+    const seller = await registerAndLogin('order-seller@example.com', roles.SELLER);
+    const other = await registerAndLogin('order-other@example.com', roles.SELLER);
+    const images = ['a', 'b', 'c'].map(id => ({ publicId: `sifit/products/${id}`, url: `https://res.cloudinary.com/test/${id}.png` }));
+    const product = await Product.create({ ...validProductBody(), sellerId: seller.user._id, images });
+    const patch = (token, imageOrder) => request(app).patch(`/api/v1/products/${product.id}`).set('Authorization', `Bearer ${token}`).send({ imageOrder });
+    const order = [images[2].publicId, images[0].publicId, images[1].publicId];
+    await patch(other.accessToken, order).expect(403);
+    await patch(seller.accessToken, [order[0], order[0], order[1]]).expect(400);
+    await patch(seller.accessToken, [order[0], order[1], 'foreign']).expect(400);
+    await patch(seller.accessToken, order.slice(1)).expect(400);
+    await patch(seller.accessToken, order).expect(200);
+    expect((await Product.findById(product.id)).images.map(image => image.publicId)).toEqual(order);
+  });
   it('creates a product successfully', async () => {
     const seller = await registerAndLogin('seller@example.com', roles.SELLER);
 

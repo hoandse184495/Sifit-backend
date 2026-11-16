@@ -29,7 +29,7 @@ router.get(
   authorize('BUYER'),
   v.validate(v.listSchema),
   asyncHandler(async (req, res) =>
-    res.json(new ApiResponse(200, await service.list(req.user, req.query), 'Đề nghị của tôi')),
+    res.json(new ApiResponse(200, await service.list(req.user, req.query, 'buyerId'), 'Đề nghị của tôi')),
   ),
 );
 router.get(

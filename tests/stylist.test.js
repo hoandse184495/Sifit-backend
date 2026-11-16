@@ -105,7 +105,7 @@ it('rejects unavailable seller, non-image bytes, expired images and malformed se
   expect(await Budget.countDocuments()).toBe(0);
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
-it('preserves the original outfit collage adapter and charges one 2-credit generation for the entire set', async () => {
+it('preserves the outfit adapter and charges one member credit per selected item', async () => {
   const dataUri = `data:image/png;base64,${png.toString('base64')}`;
   await Product.updateOne({ _id: product._id }, { 'images.0.url': dataUri });
   const bottomCategory = await Category.create({ name: 'Bottoms', slug: 'bottoms' });
@@ -121,4 +121,29 @@ it('preserves the original outfit collage adapter and charges one 2-credit gener
   const worker = require('../src/services/stylistWorker.service').startStylistWorker();
   try { await waitFor(async () => (await Job.findById(job.id)).status === 'completed'); }
   finally { await worker.stop(); }
+});
+it('charges one item as one member credit, reserves provider cost separately and refunds both on rejection', async () => {
+  const dataUri = `data:image/png;base64,${png.toString('base64')}`;
+  await Product.updateOne({ _id: product._id }, { 'images.0.url': dataUri });
+  globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 402 });
+  const job = await service.create(user._id, { requestId: 'single-outfit-0001', productIds: JSON.stringify([product.id]), engine: 'outfit', consent: 'true' }, { mimetype: 'image/png', buffer: png });
+  expect(job.cost).toBe(1);
+  expect(job.providerCost).toBe(2);
+  expect(service.summary(job).estimatedSeconds).toBe(40);
+  expect((await service.state(user._id)).quota.daily).toBe(4);
+  expect((await Budget.findOne({ _id: /^global:/ })).used).toBe(2);
+  await service.advance(job);
+  expect((await service.state(user._id)).quota.daily).toBe(5);
+  expect((await Budget.findOne({ _id: /^global:/ })).used).toBe(0);
+});
+it('charges three items as three credits and learns the estimate from completed sessions', async () => {
+  const bottom = await Category.create({ name: 'Bottoms', slug: 'bottoms' });
+  const shoes = await Category.create({ name: 'Shoes', slug: 'shoes' });
+  const items = await Product.create([bottom, shoes].map((category, i) => ({ sellerId: seller._id, title: `Outfit item ${i}`, description: 'Outfit reference', categoryId: category._id, price: 100000, size: 'M', condition: 'GOOD', status: 'ACTIVE', images: [{ url: 'https://res.cloudinary.com/test/item.png', publicId: `item-${i}` }] })));
+  await Job.create({ userId: user._id, requestId: 'historic-outfit-0001', engine: 'outfit', products: [{}, {}, {}], status: 'completed', active: false, createdAt: new Date(Date.now() - 52000), completedAt: new Date() });
+  const job = await service.create(user._id, { requestId: 'triple-outfit-0001', productIds: JSON.stringify([product.id, ...items.map(p => p.id)]), engine: 'outfit', consent: 'true' }, { mimetype: 'image/png', buffer: png });
+  expect(job.cost).toBe(3);
+  expect(job.providerCost).toBe(2);
+  expect(job.estimatedSeconds).toBe(52);
+  expect((await service.state(user._id)).quota.daily).toBe(2);
 });

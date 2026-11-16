@@ -18,7 +18,7 @@ const state = async (buyer, shopId) => {
 const followShop = async (buyer, shopId, data) => {
   await transaction(async (session) => {
     const owner = await User.findOneAndUpdate(
-      { _id: buyer._id, role: 'BUYER', status: 'ACTIVE' },
+      { _id: buyer._id, role: { $in: ['BUYER', 'SELLER'] }, status: 'ACTIVE' },
       { $inc: { __v: 1 } },
       { new: true, session },
     );
@@ -234,7 +234,7 @@ const canDeliverProductNotification = async (data) => {
       firstPublishedAt: new Date(data.sourceApprovedAt),
     }).select('sellerId'),
     Shop.findOne({ _id: data.shopId, status: 'ACTIVE' }).select('userId'),
-    User.exists({ _id: data.recipientId, role: 'BUYER', status: 'ACTIVE' }),
+    User.exists({ _id: data.recipientId, role: { $in: ['BUYER', 'SELLER'] }, status: 'ACTIVE' }),
   ]);
   return Boolean(
     follow &&

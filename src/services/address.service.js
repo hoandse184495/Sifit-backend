@@ -5,7 +5,7 @@ const ApiError = require('../utils/ApiError');
 const roles = require('../constants/roles');
 
 const addressTypeForUser = (user) =>
-  user.role === roles.BUYER ? 'SHIPPING' : user.role === roles.SELLER ? 'PICKUP' : 'BOTH';
+  user.role === roles.BUYER ? 'SHIPPING' : 'BOTH';
 
 const listAddresses = (user) =>
   Address.find({ userId: user._id, isActive: true }).sort({ isDefault: -1, createdAt: -1 });

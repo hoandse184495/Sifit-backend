@@ -282,7 +282,7 @@ describe('Seller profiles and addresses', () => {
       .set('Authorization', `Bearer ${seller.accessToken}`)
       .send({ ...addressBody, addressType: 'SHIPPING' })
       .expect(201);
-    expect(pickup.body.data.address.addressType).toBe('PICKUP');
+    expect(pickup.body.data.address.addressType).toBe('BOTH');
     const updated = await request(app)
       .patch(`/api/v1/addresses/${second.body.data.address._id}`)
       .set('Authorization', `Bearer ${user.accessToken}`)

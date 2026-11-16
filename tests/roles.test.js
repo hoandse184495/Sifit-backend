@@ -75,15 +75,18 @@ it('buyer cannot call any seller area or product mutation', async () => {
     .set('Authorization', `Bearer ${token}`)
     .expect(403);
 });
-it('seller cannot create purchases, carts, wishlists or buyer conversations', async () => {
+it('sellers reach shopping routes with normal validation and cannot access administration', async () => {
   const token = await loginAs('SELLER');
   for (const url of ['/orders', '/cart/items', '/wishlist/items', '/conversations']) {
     await request(app)
       .post(`/api/v1${url}`)
       .set('Authorization', `Bearer ${token}`)
       .send({})
-      .expect(403);
+      .expect(400);
   }
+  await request(app).get('/api/v1/cart').set('Authorization', `Bearer ${token}`).expect(200);
+  await request(app).get('/api/v1/wishlist').set('Authorization', `Bearer ${token}`).expect(200);
+  await request(app).get('/api/v1/admin/dashboard').set('Authorization', `Bearer ${token}`).expect(403);
 });
 it('an existing shipment is still protected against a different seller', async () => {
   const Shipment = require('../src/models/shipment.model');

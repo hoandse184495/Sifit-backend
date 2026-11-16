@@ -288,7 +288,7 @@ describe('Manual PayOS refund workflow', () => {
     await call('post', '/admin/manual-refunds', buyer).send(body()).expect(403);
     const refund = await create();
     await call('get', `/refunds/${refund._id}`, outsider).expect(404);
-    await call('get', `/refunds/${refund._id}`, seller).expect(403);
+    await call('get', `/refunds/${refund._id}`, seller).expect(404);
     await call('put', `/refunds/${refund._id}/bank`, outsider).send(bank).expect(404);
     await call('put', `/refunds/${refund._id}/bank`, buyer)
       .send({ ...bank, ownsAccount: false })

@@ -84,7 +84,7 @@ const createOffer = async (buyer, productId, data) => {
     offer = await transaction(async (session) => {
       if (
         !(await User.findOneAndUpdate(
-          { _id: buyer._id, role: 'BUYER', status: 'ACTIVE' },
+          { _id: buyer._id, role: { $in: ['BUYER', 'SELLER'] }, status: 'ACTIVE' },
           { $inc: { __v: 1 } },
           { session },
         ))
@@ -161,7 +161,7 @@ const respond = async (seller, id, data) => {
     if (String(product.sellerId) !== String(seller._id) || product.price !== initial.listingPrice)
       throw new ApiError(409, 'Sản phẩm đã thay đổi. Người mua cần gửi lại đề nghị.');
     if (
-      !(await User.exists({ _id: initial.buyerId, status: 'ACTIVE', role: 'BUYER' }).session(
+      !(await User.exists({ _id: initial.buyerId, status: 'ACTIVE', role: { $in: ['BUYER', 'SELLER'] } }).session(
         session,
       ))
     )
@@ -249,14 +249,14 @@ const presentMany = async (items) => {
 };
 const getOffer = async (user, id) => {
   const offer = await populate(
-    Offer.findOne({ _id: id, [user.role === 'SELLER' ? 'sellerId' : 'buyerId']: user._id }),
+    Offer.findOne({ _id: id, $or: [{ sellerId: user._id }, { buyerId: user._id }] }),
   ).lean();
   if (!offer) throw new ApiError(404, 'Không tìm thấy đề nghị hoặc bạn không có quyền xem.');
   return (await presentMany([offer]))[0];
 };
-const list = async (user, { page = 1, limit = 20, status, productId }) => {
+const list = async (user, { page = 1, limit = 20, status, productId }, side = user.role === 'SELLER' ? 'sellerId' : 'buyerId') => {
   const query = {
-    [user.role === 'SELLER' ? 'sellerId' : 'buyerId']: user._id,
+    [side]: user._id,
     ...(productId ? { productId } : {}),
   };
   if (status === 'EXPIRED')

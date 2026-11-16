@@ -154,6 +154,16 @@ describe('Cart API', () => {
 });
 
 describe('Checkout and orders', () => {
+  it('allows a seller to shop from another shop without gaining access to that shop management', async () => {
+    const shopper = await registerAndLogin('seller-shopper@example.com', roles.SELLER);
+    const seller = await registerAndLogin('other-shop@example.com', roles.SELLER);
+    const product = await Product.create(productPayload(seller.user._id));
+    await addToCart(shopper.accessToken, product._id).expect(200);
+    const response = await checkout(shopper.accessToken).expect(201);
+    expect(response.body.data.checkout.orders).toHaveLength(1);
+    expect(await Order.countDocuments({ buyerId: shopper.user._id, sellerId: seller.user._id })).toBe(1);
+    await request(app).patch(`/api/v1/products/${product.id}`).set('Authorization', `Bearer ${shopper.accessToken}`).send({ title: 'Unauthorized change' }).expect(403);
+  });
   it('creates a single-seller checkout using server-side price and commission', async () => {
     const buyer = await registerAndLogin('buyer@example.com');
     const seller = await registerAndLogin('seller@example.com', roles.SELLER);
