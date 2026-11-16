@@ -29,6 +29,7 @@ const shippingRoutes = require('./shipping.routes');
 const wishlistRoutes = require('./wishlist.routes');
 
 const router = express.Router();
+router.use('/stylist', require('./stylist.routes'));
 const authenticate = require('../middlewares/auth.middleware');
 const authorize = require('../middlewares/authorize.middleware');
 const roles = require('../constants/roles');

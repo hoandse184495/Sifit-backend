@@ -4,10 +4,12 @@ const env = require('./config/env');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
 const { initSocket, closeSocket } = require('./socket');
 const { startBackgroundJobs } = require('./services/backgroundJob.service');
+const { startStylistWorker } = require('./services/stylistWorker.service');
 const logger = require('./utils/logger');
 
 let server;
 let backgroundJobs;
+let stylistWorker;
 let isShuttingDown = false;
 
 const shutdown = async (signal) => {
@@ -21,6 +23,7 @@ const shutdown = async (signal) => {
   try {
     // Finish active jobs before closing their database/socket dependencies.
     await backgroundJobs?.stop();
+    await stylistWorker?.stop();
     await closeSocket();
     if (server?.listening) {
       await new Promise((resolve, reject) => {
@@ -54,6 +57,7 @@ const startServer = async () => {
     server.listen(env.PORT, () => {
       logger.info(`SIFIT API listening on port ${env.PORT}`);
       backgroundJobs = startBackgroundJobs();
+      stylistWorker = startStylistWorker();
     });
   } catch (error) {
     logger.error(`Failed to start server: ${error.message}`);
