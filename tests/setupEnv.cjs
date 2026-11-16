@@ -1,6 +1,8 @@
 // Tests never inherit live payment credentials or providers from the developer .env.
 const process = require('node:process');
 process.env.NODE_ENV = 'test';
+process.env.TRYON_MODE = 'disabled';
+process.env.FASHN_API_KEY = '';
 process.env.PAYMENT_PROVIDER = 'simulator';
 process.env.PAYMENTS_ENABLED = 'true';
 process.env.SHIPPING_PROVIDER = 'simulator';
