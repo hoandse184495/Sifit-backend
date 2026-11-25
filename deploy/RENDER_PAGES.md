@@ -4,7 +4,7 @@ FE va BE giu nguyen hai repository rieng. Khong gop code va khong copy secret BE
 
 | Thanh phan | Repository | Branch | Hosting |
 | --- | --- | --- | --- |
-| FE | TuanKhang-SE/sifit-prototype | frontend-api-seller-ui | Cloudflare Pages |
+| FE | zaming3007/sifit-prototype | main | Cloudflare Pages |
 | BE | hoandse184495/Sifit-backend | main | Render Web Service, runtime Node |
 
 ## File env rieng
@@ -35,7 +35,7 @@ Tat ca file `.env` va `.env.production` deu bi Git ignore. Push code khong tu do
 
 ## Cloudflare Pages
 
-- Repo FE, production branch frontend-api-seller-ui, root directory de trong.
+- Repo FE, production branch main, root directory de trong.
 - Build: `npm run build`; output: `dist`.
 - Nhap cac key/value trong `sifit-prototype/.env.production` vao Production environment truoc khi build.
 - Them custom domain DOMAIN trong Pages. Hai URL FE/API phai deu la HTTPS va cung domain goc.
@@ -43,5 +43,12 @@ Tat ca file `.env` va `.env.production` deu bi Git ignore. Push code khong tu do
 - Moi khi doi VITE_ variables, tao deploy moi de build lai FE.
 
 Kiem tra API health, login/F5/logout, anh va chat qua domain thuc. Tao admin bang bootstrap script theo README deploy, sau do seller dang san pham va admin duyet. Auto-deploy cua moi dich vu theo doi branch rieng; khi thay ca BE/FE, deploy BE truoc va giu API tuong thich cho den khi FE deploy xong.
+
+## Bật PayOS trên sifit.id.vn
+
+Cấu hình demo phía trên cố ý tắt thanh toán. Khi mở thanh toán, thực hiện theo
+[PAYOS_PRODUCTION.md](PAYOS_PRODUCTION.md): nhập khóa vào Render, đăng ký webhook
+HTTPS cố định, bật backend rồi build lại Cloudflare Pages với `VITE_DEMO_MODE=false`.
+File `.env.production` local không phản ánh chắc chắn cấu hình đang chạy trên hosting.
 
 Nguon: https://render.com/docs/deploy-node-express-app ; https://render.com/docs/deploys ; https://developers.cloudflare.com/pages/configuration/custom-domains/

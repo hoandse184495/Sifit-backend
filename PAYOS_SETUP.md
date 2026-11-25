@@ -17,6 +17,9 @@ Tiền về tài khoản ngân hàng Sifit liên kết PayOS. Website quản lý
 
 ## Cấu hình local
 
+Đưa lên Render/Cloudflare tại `sifit.id.vn`: xem [hướng dẫn production](deploy/PAYOS_PRODUCTION.md)
+về khóa, webhook cố định, cờ bật thanh toán và build frontend.
+
 Trong `.env` backend (không đưa khóa lên Git):
 
 ```dotenv

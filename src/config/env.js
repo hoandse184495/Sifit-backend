@@ -45,6 +45,7 @@ const envSchema = z
     PAYOS_CLIENT_ID: z.string().trim().default(''),
     PAYOS_API_KEY: z.string().trim().default(''),
     PAYOS_CHECKSUM_KEY: z.string().trim().default(''),
+    PAYOS_WEBHOOK_URL: z.string().trim().default(''),
     PAYMENT_MODE: z.enum(['sandbox', 'production']).default('sandbox'),
     PAYMENT_WEBHOOK_SECRET: z.string().optional(),
     PAYMENT_RETURN_URL: z.url().default('http://localhost:5173/payment/result'),
@@ -89,9 +90,16 @@ const envSchema = z
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: 'Use a public HTTPS origin without a path or trailing slash' });
         }
       }
-      if (env.PAYMENTS_ENABLED && env.PAYMENT_PROVIDER === 'payos' &&
-        (env.PAYMENT_MODE !== 'production' || !env.PAYOS_CLIENT_ID || !env.PAYOS_API_KEY || !env.PAYOS_CHECKSUM_KEY || !env.PAYOS_WEBHOOK_URL.startsWith('https://'))) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['PAYOS_WEBHOOK_URL'], message: 'Enabled PayOS payments require production mode, credentials and an HTTPS webhook URL' });
+      if (env.PAYMENTS_ENABLED && env.PAYMENT_PROVIDER === 'payos') {
+        let webhook;
+        try { webhook = new URL(env.PAYOS_WEBHOOK_URL); } catch { /* Report configuration errors below. */ }
+        if (env.PAYMENT_MODE !== 'production' || !env.PAYOS_CLIENT_ID || !env.PAYOS_API_KEY || !env.PAYOS_CHECKSUM_KEY ||
+          !webhook || webhook.protocol !== 'https:' ||
+          ['localhost', '127.0.0.1', '[::1]'].includes(webhook.hostname) ||
+          webhook.pathname !== '/api/v1/webhooks/payments/payos' ||
+          webhook.username || webhook.password || webhook.search || webhook.hash) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['PAYOS_WEBHOOK_URL'], message: 'Enabled PayOS payments require production mode, credentials and a public HTTPS webhook ending in /api/v1/webhooks/payments/payos' });
+        }
       }
     }
 
