@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const localizeNotificationText = require('../utils/notificationText');
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -78,7 +79,11 @@ const notificationSchema = new mongoose.Schema(
     eventKey: { type: String, required: true, trim: true },
     deletedAt: Date,
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    // Localize legacy records when returned through REST or Socket.IO.
+    toJSON: { transform: (_document, notification) => localizeNotificationText(notification) },
+  },
 );
 
 notificationSchema.index({ recipientId: 1, eventKey: 1 }, { unique: true });

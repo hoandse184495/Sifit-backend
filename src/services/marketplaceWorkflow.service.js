@@ -37,7 +37,7 @@ const assertNoFinancialHold = async (order, session) => {
   )
     throw new ApiError(
       409,
-      'Đơn có khiếu nại hoặc quyết định hoàn tiền, chưa thể hoàn tất hoặc chi trả.',
+      'Đơn đang bị giữ để đối soát, chưa thể hoàn tất hoặc chi trả.',
     );
   if (await require('./refundPolicy.service').hasRefundHold(order, session))
     throw new ApiError(409, 'Thanh toán có khoản hoàn hoặc ngoại lệ cần đối soát trước.');
@@ -125,7 +125,7 @@ const completeOrder = (admin, id, { note, allowUnconfirmed }) =>
         actorId: admin._id,
         type: 'ORDER_COMPLETED',
         title: 'Đơn hàng đã được admin duyệt hoàn tất',
-        body: 'Đơn đã hoàn tất. Chi trả được theo dõi riêng và chỉ thực hiện khi hết thời hạn bảo vệ, không có khiếu nại.',
+        body: 'Đơn đã hoàn tất. Chi trả được xử lý riêng sau thời hạn bảo vệ và khi đơn đủ điều kiện.',
         resourceType: 'ORDER',
         resourceId: order._id,
         key: `order:${id}:completed:${recipientId}`,

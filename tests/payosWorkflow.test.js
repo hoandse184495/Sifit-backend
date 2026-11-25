@@ -331,7 +331,7 @@ it('requires seller shipping and handover, buyer confirmation, then explicit adm
   expect((await Order.findById(order.id)).completedBy.toString()).toBe(admin.id);
   expect((await settlements.evaluateEligibleOrders()).eligibleCount).toBe(0);
 });
-it('requires proof/confirmation and blocks completion during an active dispute', async () => {
+it('requires proof/confirmation and blocks completion during a historical dispute hold', async () => {
   await pay();
   await Order.updateOne(
     { _id: order._id },
@@ -343,9 +343,10 @@ it('requires proof/confirmation and blocks completion during an active dispute',
   );
   await complete().expect(409);
   await Order.updateOne({ _id: order._id }, { buyerConfirmedAt: new Date() });
-  await api('post', `/orders/${order.id}/disputes`)
-    .send({ reason: 'DAMAGED_ITEM', description: 'Damaged garment during transit' })
-    .expect(201);
+  await require('../src/models/dispute.model').create({
+    orderId: order._id, buyerId: order.buyerId, sellerId: order.sellerId,
+    reason: 'DAMAGED_ITEM', description: 'Historical case pending review',
+  });
   await complete().expect(409);
 });
 it('keeps bank details private, snapshots approved bank and only marks PAID after real-transfer recording', async () => {

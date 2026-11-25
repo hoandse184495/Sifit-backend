@@ -12,7 +12,6 @@ const Product = require('../models/product.model');
 const ProductReview = require('../models/productReview.model');
 const SellerRating = require('../models/sellerRating.model');
 const UserBlock = require('../models/userBlock.model');
-const Dispute = require('../models/dispute.model');
 const router = express.Router();
 const idSchema = z.object({ params: z.object({ id: objectId }) });
 
@@ -24,19 +23,6 @@ for (const role of [roles.ADMIN, roles.SELLER]) {
     res.json(new ApiResponse(200, { product }, 'Product retrieved'));
   }));
 }
-router.get('/seller/disputes', authenticate, authorize(roles.SELLER), validate(z.object({ query: z.object({
-  page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(50).default(20),
-  status: z.enum(['OPEN', 'UNDER_REVIEW', 'RESOLVED_BUYER', 'RESOLVED_SELLER', 'CLOSED']).optional(),
-}) })), asyncHandler(async (req, res) => {
-  const { page, limit, status } = req.query;
-  const query = { sellerId: req.user._id, ...(status ? { status } : {}) };
-  const [items, total] = await Promise.all([
-    Dispute.find(query).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
-    Dispute.countDocuments(query),
-  ]);
-  res.json(new ApiResponse(200, { items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }, 'Seller disputes retrieved'));
-}));
-
 router.get('/admin/categories', authenticate, authorize(roles.ADMIN), asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, { categories: await Category.find().sort({ name: 1 }) }, 'Categories retrieved'));
 }));

@@ -2,7 +2,7 @@
 
 ## Cách sử dụng
 
-1. Admin vào **Tài chính → Giao dịch thanh toán → Tạo yêu cầu hoàn tiền**. Chọn đúng đơn thuộc giao dịch, số tiền và lý do. Có thể đi từ khiếu nại đã chấp nhận bên mua bằng nút **Xử lý hoàn tiền cho đơn này**.
+1. Admin vào **Tài chính → Giao dịch thanh toán → Tạo yêu cầu hoàn tiền**. Chọn đúng đơn thuộc giao dịch, số tiền và lý do. Với quyết định hoàn cũ đã đủ điều kiện, biểu mẫu tự gửi liên kết lịch sử khi chọn đơn.
 2. Người mua mở thông báo hoặc **Đơn mua → Xem khoản hoàn và tài khoản nhận tiền**, chọn ngân hàng, nhập số tài khoản/chủ tài khoản và xác nhận thông tin.
 3. Admin vào **Tài chính → Hoàn tiền người mua → Chi tiết và xử lý hoàn tiền**, kiểm tra tài khoản rồi duyệt. Thông tin nhận tiền được chụp vào `bankSnapshot` và không thể bị người mua sửa sau khi duyệt. Nếu người mua đã sửa thông tin trong lúc admin đang xem, yêu cầu duyệt trả 409; dùng **Tải lại thông tin hoàn tiền** để kiểm tra bản mới.
 4. Admin chuyển khoản ngoài ứng dụng đến đúng tài khoản đã chốt, tải ảnh chứng từ, nhập mã giao dịch, thời gian và ghi chú đối chiếu; đánh dấu đã kiểm tra rồi **Ghi nhận đã hoàn tiền**.
@@ -26,7 +26,7 @@ Khoản hoàn tiền hàng `kind=MANUAL_BANK` thuộc một `orderId`, `paymentI
 
 Khoản hoàn tiền chưa phân bổ `kind=RECEIPT_ADJUSTMENT` được tạo từ **Tài chính → Thanh toán bất thường**, gắn với payment/người mua, không có `orderId`. Luồng ngân hàng/chứng từ dùng chung, nhưng số dư giữ/đã hoàn nằm trong `exceptionRefundReservedAmount/exceptionRefundedAmount`, không điều chỉnh tiền hàng, hoa hồng hay khoản chi người bán. Chi tiết và ví dụ tại [PAYMENT_EXCEPTIONS.md](PAYMENT_EXCEPTIONS.md).
 
-Nếu quyết định khiếu nại yêu cầu trả hàng, phải hoàn thành bước admin xác minh nhận lại ở [quy trình trả hàng](DISPUTE_RETURNS.md). Kiểm tra này được áp dụng cả lúc tạo khoản hoàn, duyệt tài khoản và ghi nhận chuyển tiền; xác nhận của riêng người bán chưa mở khóa hoàn tiền.
+Nếu quyết định khiếu nại yêu cầu trả hàng, hồ sơ lịch sử phải có xác minh nhận lại của admin. Kiểm tra này được áp dụng cả lúc tạo khoản hoàn, duyệt tài khoản và ghi nhận chuyển tiền; xác nhận của riêng người bán chưa mở khóa hoàn tiền.
 
 Hoàn tiền theo khiếu nại phải liên kết quyết định RESOLVED_BUYER chưa được hoàn; khi ghi nhận xong, lưu `Dispute.refundSettledAt` và `refundId`. Nếu đơn còn trong quá trình xem xét khiếu nại, phải chốt quyết định trước.
 

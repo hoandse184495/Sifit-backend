@@ -6,7 +6,7 @@ Google sign-in setup and validation: [GOOGLE_SIGNIN.md](GOOGLE_SIGNIN.md).
 
 Local account suspension, concurrent admin safety and independent API rate limits: [SECURITY_FIXES_R1_R3.md](SECURITY_FIXES_R1_R3.md).
 
-SIFIT is a production-oriented backend foundation for a C2C second-hand fashion marketplace. It is designed for users who can buy and sell from the same account, while SIFIT later manages commissions, verified payments, seller payouts, disputes, and admin operations.
+SIFIT is a production-oriented backend foundation for a C2C second-hand fashion marketplace. It is designed for users who can buy and sell from the same account, while SIFIT later manages commissions, verified payments, seller payouts and admin operations.
 
 This initialization focuses only on the backend foundation: Express application setup, environment validation, MongoDB connection management, centralized errors, a health endpoint, testing, linting, and maintainable project structure.
 
@@ -110,7 +110,6 @@ npm run worker:evaluate-payouts    # Evaluate payout eligibility foundation
 npm run worker:process-payouts     # Process simulated approved payouts foundation
 npm run worker:reconcile-shipments # Simulator shipment reconciliation placeholder
 npm run worker:complete-deliveries # Complete eligible delivered orders
-npm run worker:dispute-deadlines   # Dispute deadline placeholder
 npm run worker:notification-outbox # Deliver queued notification outbox events
 ```
 
@@ -731,20 +730,9 @@ Admin product, order, finance, audit, and export APIs:
 
 CSV exports cap the requested size, exclude passwords/tokens/secrets, escape values, and prefix formula-like values with a single quote to reduce spreadsheet injection risk. Export actions are recorded in append-only admin audit logs.
 
-## Buyer Protection And Disputes
+## Buyer Protection
 
-`BUYER_PROTECTION_DAYS` controls the protection period after verified delivery. Payout eligibility is blocked while the protection window is active or while a dispute is open.
-
-Dispute APIs:
-
-- `POST /api/v1/orders/:id/disputes`
-- `GET /api/v1/disputes/my`
-- `GET /api/v1/disputes/:id`
-- `GET /api/v1/admin/disputes`
-- `PATCH /api/v1/admin/disputes/:id/review`
-- `PATCH /api/v1/admin/disputes/:id/resolve`
-
-Evidence handling is modeled as private references. Do not expose evidence with public URLs.
+`BUYER_PROTECTION_DAYS` still delays seller settlement after verified delivery. The dispute and return workflow has been retired. Historical cases and financial holds are retained for reconciliation. Existing approved refunds and recoveries can still be processed through Finance and Operations when their original conditions are met.
 
 ## Settlement Eligibility
 
@@ -754,7 +742,7 @@ Seller proceeds become payout-eligible only when:
 - Order is `COMPLETED`.
 - Delivery is verified.
 - Buyer protection window has ended.
-- No active dispute exists.
+- No unresolved financial hold from a historical case exists.
 - Seller verification is complete.
 - Payout hold period has ended.
 - The order has not already been paid or reserved for another payout.
@@ -787,7 +775,7 @@ Buyers can follow shops, browse their available products and receive notificatio
 
 Authorization roles are `BUYER`, `SELLER`, and `ADMIN`. Buyers create carts, wishlists, purchase orders and product conversations. Sellers manage products, shops, shipping, verification and earnings. Admins use the dedicated moderation endpoints. All `/seller` endpoints enforce the seller role; existing ownership checks still apply. Shared chat, notifications and addresses remain available to authenticated accounts.
 
-Run `npm run migrate:roles` for a dry run, then `npm run migrate:roles -- --apply` to upgrade legacy accounts. Legacy `USER` accounts with a shop, product or sale become `SELLER`; the others become `BUYER`. Admins and already migrated roles are unchanged. The script is idempotent and preserves orders, chats, addresses and all other business data. Sellers can still settle, review, dispute and track their own historical purchases, but cannot create new purchase orders.
+Run `npm run migrate:roles` for a dry run, then `npm run migrate:roles -- --apply` to upgrade legacy accounts. Legacy `USER` accounts with a shop, product or sale become `SELLER`; the others become `BUYER`. Admins and already migrated roles are unchanged. The script is idempotent and preserves orders, chats, addresses and all other business data. Sellers can still settle, review and track their own historical purchases, but cannot create new purchase orders.
 
 Future financial features must calculate prices, commissions, and payout eligibility on the server. Store monetary amounts as integer VND units, preserve commission snapshots per order, verify payment webhooks, and design idempotent payment processing.
 
@@ -798,4 +786,4 @@ Future financial features must calculate prices, commissions, and payout eligibi
 - Shopping carts and orders
 - Payment integration and webhook verification
 - Commission snapshots and seller payout workflows
-- Reviews, disputes, and admin dashboard tools
+- Reviews and admin dashboard tools

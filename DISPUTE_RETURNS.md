@@ -1,5 +1,7 @@
 # Bằng chứng khiếu nại và trả hàng trước hoàn tiền
 
+> Tài liệu lưu trữ. Giao diện, API và tác vụ định kỳ của luồng này đã được gỡ. Dữ liệu lịch sử và điều kiện đối soát các giao dịch cũ vẫn được giữ.
+
 ## Cách sử dụng
 
 1. Người mua mở khiếu nại trong **Đơn mua & giỏ hàng → Đơn mua**. Sau khi gửi, chọn **Bổ sung bằng chứng và theo dõi trả hàng**. Cũng có thể mở từ mục Khiếu nại hoặc thông báo.

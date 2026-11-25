@@ -27,7 +27,6 @@ const envSchema = z
     SMTP_FROM: z.string().default(''),
     SELLER_SHIP_DAYS: z.coerce.number().int().min(1).max(30).default(3),
     SHIP_REMINDER_HOURS: z.coerce.number().int().min(1).max(168).default(24),
-    DISPUTE_REVIEW_DAYS: z.coerce.number().int().min(1).max(30).default(3),
     JWT_ACCESS_SECRET: z.string().optional(),
     JWT_REFRESH_SECRET: z.string().optional(),
     JWT_ACCESS_EXPIRES_IN: z.string().min(1).default('15m'),

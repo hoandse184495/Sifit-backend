@@ -284,6 +284,13 @@ describe('Phase 8 notifications', () => {
       .set('Authorization', `Bearer ${seller.accessToken}`)
       .expect(200);
     expect(sellerNotifications.body.data.items).toHaveLength(1);
+    expect(sellerNotifications.body.data.items[0]).toMatchObject({
+      title: 'Tin nhắn mới',
+      body: buyer.user.fullName + ' đã gửi tin nhắn cho bạn.',
+    });
+    expect(await Notification.findOne({ recipientId: seller.user._id }).lean()).toMatchObject({
+      title: 'Tin nhắn mới',
+    });
 
     await request(app)
       .get('/api/v1/notifications')
@@ -308,6 +315,35 @@ describe('Phase 8 notifications', () => {
       .expect(201);
 
     expect(await Notification.countDocuments({ recipientId: seller.user._id })).toBe(1);
+  });
+
+  it('localizes legacy notification text on read without changing other records', async () => {
+    const seller = await registerAndLogin('seller@example.com', roles.SELLER);
+    const stored = await Notification.create({
+      recipientId: seller.user._id,
+      type: 'DISPUTE_OPENED',
+      title: 'Dispute opened',
+      body: 'A buyer opened a dispute for an order',
+      resourceType: 'DISPUTE',
+      eventKey: 'legacy-dispute-opened',
+    });
+    await Notification.create({
+      recipientId: seller.user._id,
+      type: 'FOLLOWED_SHOP_NEW_PRODUCT',
+      title: 'Gian hàng có sản phẩm mới',
+      body: 'Vintage Denim Jacket',
+      resourceType: 'PRODUCT',
+      eventKey: 'product-name-preserved',
+    });
+    const auth = 'Bearer ' + seller.accessToken;
+    const list = await request(app).get('/api/v1/notifications').set('Authorization', auth).expect(200);
+    expect(list.body.data.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Có khiếu nại mới', body: 'Người mua đã mở khiếu nại cho một đơn hàng.' }),
+      expect.objectContaining({ title: 'Gian hàng có sản phẩm mới', body: 'Vintage Denim Jacket' }),
+    ]));
+    const read = await request(app).patch('/api/v1/notifications/' + stored.id + '/read').set('Authorization', auth).expect(200);
+    expect(read.body.data.notification).toMatchObject({ title: 'Có khiếu nại mới', isRead: true });
+    expect((await Notification.findById(stored.id).lean()).title).toBe('Dispute opened');
   });
 
   it('queues product moderation notifications through the outbox idempotently', async () => {

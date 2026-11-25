@@ -3,7 +3,6 @@ const paymentStatus = require('../constants/paymentStatus');
 const commissionStatus = require('../constants/commissionStatus');
 const payoutStatus = require('../constants/payoutStatus');
 const Commission = require('../models/commission.model');
-const Dispute = require('../models/dispute.model');
 const Order = require('../models/order.model');
 const Product = require('../models/product.model');
 const Refund = require('../models/refund.model');
@@ -56,7 +55,6 @@ const getOverview = async (filters = {}) => {
     totalRefundedAmount,
     pendingPayoutAmount,
     completedPayoutAmount,
-    activeDisputes,
   ] = await Promise.all([
     count(User, createdAtRange),
     count(User, { status: 'ACTIVE', ...createdAtRange }),
@@ -110,7 +108,6 @@ const getOverview = async (filters = {}) => {
       'amount',
     ),
     sum(SellerPayout, { status: payoutStatus.PAID, ...payoutRange }, 'amount'),
-    count(Dispute, { status: { $in: ['OPEN', 'UNDER_REVIEW'] }, ...createdAtRange }),
   ]);
 
   return {
@@ -133,7 +130,6 @@ const getOverview = async (filters = {}) => {
     totalRefundedAmount,
     pendingPayoutAmount,
     completedPayoutAmount,
-    activeDisputes,
     definitions: {
       grossMerchandiseValue: 'Sum of paid seller-order subtotal snapshots in VND.',
       platformCommissionEarned: 'Sum of recognized commission snapshots, not gross order amount.',

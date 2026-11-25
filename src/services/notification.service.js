@@ -1,6 +1,7 @@
 const httpStatus = require('../constants/httpStatus');
 const Notification = require('../models/notification.model');
 const ApiError = require('../utils/ApiError');
+const localizeNotificationText = require('../utils/notificationText');
 const preferenceService = require('./notificationPreference.service');
 
 const getSocket = () => require('../socket');
@@ -75,7 +76,7 @@ const createNotification = async (data, options = {}) => {
 
   const notification = await Notification.findOneAndUpdate(
     { recipientId: data.recipientId, eventKey: data.eventKey },
-    { $setOnInsert: data },
+    { $setOnInsert: localizeNotificationText(data) },
     { new: true, upsert: true, setDefaultsOnInsert: true, session: options.session },
   );
 

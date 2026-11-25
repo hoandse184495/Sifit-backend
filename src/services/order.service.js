@@ -11,11 +11,10 @@ const Dispute = require('../models/dispute.model');
 const SellerRating = require('../models/sellerRating.model');
 const ProductReview = require('../models/productReview.model');
 const { ownReviewDetails } = require('./productReview.service');
-const { getDisputeEligibility } = require('./disputePolicy');
 
 const withBuyerDetails = async (orders) => {
   const ids = orders.map((order) => order._id);
-  const [disputes, ratings, reviews, refunds] = await Promise.all([
+  const [legacyCases, ratings, reviews, refunds] = await Promise.all([
     Dispute.find({
       orderId: { $in: ids },
       $or: [
@@ -23,7 +22,7 @@ const withBuyerDetails = async (orders) => {
         { status: 'RESOLVED_BUYER', refundSettledAt: null },
       ],
     })
-      .select('orderId status reason')
+      .select('orderId')
       .lean(),
     SellerRating.find({ orderId: { $in: ids } })
       .select('orderId rating comment status createdAt')
@@ -36,12 +35,10 @@ const withBuyerDetails = async (orders) => {
       .lean(),
   ]);
   return orders.map((order) => {
-    const activeDispute = disputes.find((item) => String(item.orderId) === String(order._id));
-    const eligibility = getDisputeEligibility(order);
+    const reviewsBlocked = legacyCases.some((item) => String(item.orderId) === String(order._id));
     return {
       ...order.toObject(),
-      disputeEligibility: { ...eligibility, eligible: eligibility.eligible && !activeDispute },
-      activeDispute: activeDispute || null,
+      reviewsBlocked,
       refunds: refunds.filter((item) => String(item.orderId) === String(order._id)),
       sellerRating: ratings.find((item) => String(item.orderId) === String(order._id)) || null,
       productReviews: reviews

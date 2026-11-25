@@ -14,17 +14,6 @@ const assertAdmin = (admin, order) => {
     throw new ApiError(403, 'Cần admin không liên quan đến đơn xử lý thu hồi.');
 };
 const lockOrder = (id, session) => Order.findOneAndUpdate({ _id: id }, { $inc: { settlementVersion: 1 } }, { new: true, session });
-const openLateCase = (admin, id, data) => transaction(async session => {
-  const order = await lockOrder(id, session); if (!order) throw new ApiError(404, 'Không tìm thấy đơn.'); assertAdmin(admin, order);
-  if (order.orderStatus !== 'COMPLETED' || order.paymentStatus !== 'PAID' || !(await Payout.exists({ orderIds: id, status: 'PAID' }).session(session)))
-    throw new ApiError(409, 'Chỉ tiếp nhận bổ sung cho đơn hoàn tất, đã thanh toán và đã chi người bán.');
-  if (await Dispute.exists({ orderId: id, $or: [{ status: { $in: ['OPEN', 'UNDER_REVIEW'] } }, { status: 'RESOLVED_BUYER', refundSettledAt: null }] }).session(session)) throw new ApiError(409, 'Đơn đang có khiếu nại cần xử lý.');
-  const [dispute] = await Dispute.create([{ orderId: id, buyerId: order.buyerId, sellerId: order.sellerId,
-    reason: 'OTHER', description: data.reason, reviewBy: new Date(Date.now() + require('../config/env').DISPUTE_REVIEW_DAYS * 86400000),
-    auditHistory: [{ action: 'POST_PAYOUT_CASE_OPENED', actorId: admin._id, note: data.reason }] }], { session });
-  await audit.record({ admin, action: 'POST_PAYOUT_CASE_OPENED', resourceType: 'DISPUTE', resourceId: dispute._id, reason: data.reason, session });
-  return dispute;
-});
 const create = (admin, orderId, reason) => transaction(async session => {
   const order = await lockOrder(orderId, session); if (!order) throw new ApiError(404, 'Không tìm thấy đơn.'); assertAdmin(admin, order);
   const existing = await Recovery.findOne({ orderId }).session(session); if (existing) return existing;
@@ -38,7 +27,7 @@ const create = (admin, orderId, reason) => transaction(async session => {
     requiredAmount, refundAmount: order.buyerTotal - (order.refundedAmount || 0), status: requiredAmount === 0 ? 'FUNDED' : 'OPEN', createdBy: admin._id, reason }], { session });
   await audit.record({ admin, action: 'RECOVERY_OPENED', resourceType: 'RECOVERY', resourceId: item._id, reason, after: { requiredAmount }, session });
   await require('./notificationEvent.service').enqueueNotificationEvent({ eventKey: `recovery:${item._id}:opened`, type: 'NOTIFICATION_CREATE',
-    payload: { recipientId: item.sellerId, type: 'SELLER_RECOVERY', title: 'Yêu cầu đối soát thu hồi tiền', body: `Admin đã mở hồ sơ thu hồi ${requiredAmount} VND. Liên hệ hỗ trợ để xác nhận thông tin trước khi chuyển tiền.`, resourceType: 'DISPUTE', resourceId: dispute._id, eventKey: `recovery:${item._id}:opened` } }, { session });
+    payload: { recipientId: item.sellerId, type: 'SELLER_RECOVERY', title: 'Yêu cầu đối soát thu hồi tiền', body: `Admin đã mở hồ sơ thu hồi ${requiredAmount} VND. Liên hệ hỗ trợ để xác nhận thông tin trước khi chuyển tiền.`, resourceType: 'ORDER', resourceId: order._id, eventKey: `recovery:${item._id}:opened` } }, { session });
   return item;
 });
 const get = async (user, id) => {
@@ -87,4 +76,4 @@ const assertFunded = async (orderId, session, context = {}) => {
   if (context.amount !== undefined && String(item.disputeId) !== String(context.disputeId || '')) throw new ApiError(409, 'Cần liên kết đúng khiếu nại sau chi trả.');
   return item;
 };
-module.exports = { openLateCase, create, get, recordReceipt, assertFunded };
+module.exports = { create, get, recordReceipt, assertFunded };

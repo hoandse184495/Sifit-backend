@@ -26,10 +26,8 @@ const run = async () => {
     const Payment = require('../src/models/payment.model');
     const Commission = require('../src/models/commission.model');
     const Payout = require('../src/models/sellerPayout.model');
-    const Dispute = require('../src/models/dispute.model');
     const settlements = require('../src/services/settlementEligibility.service');
     const refunds = require('../src/services/refund.service');
-    const disputes = require('../src/services/dispute.service');
     await mongoose.connect(mongo.getUri());
     await Promise.all(Object.values(mongoose.models).map((model) => model.init()));
     const [buyer, seller, admin] = await User.create(
@@ -143,31 +141,6 @@ const run = async () => {
       report.payosRefund = { statusCode: error.statusCode, message: error.message };
     }
 
-    const dispute = await Dispute.create({
-      orderId: orders[50]._id,
-      buyerId: buyer._id,
-      sellerId: seller._id,
-      reason: 'ITEM_NOT_AS_DESCRIBED',
-      description: 'Audit concurrent admin decisions',
-      status: 'UNDER_REVIEW',
-    });
-    const decisions = await Promise.allSettled([
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_BUYER',
-        resolution: 'Buyer decision from tab one',
-      }),
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_SELLER',
-        resolution: 'Seller decision from tab two',
-      }),
-    ]);
-    const persisted = await Dispute.findById(dispute._id);
-    report.concurrentDispute = {
-      responses: decisions.map((result) => result.status),
-      savedResolutionCount: persisted.auditHistory.filter((item) => item.action === 'RESOLVE')
-        .length,
-      finalStatus: persisted.status,
-    };
     const Product = require('../src/models/product.model');
     const Category = require('../src/models/category.model');
     const category = await Category.create({ name: 'Audit category', slug: 'audit-category' });

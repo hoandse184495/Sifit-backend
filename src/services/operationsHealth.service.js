@@ -2,19 +2,16 @@ const Job = require('../models/backgroundJob.model');
 const Outbox = require('../models/outboxEvent.model');
 const Mail = require('../models/mailDelivery.model');
 const Order = require('../models/order.model');
-const Dispute = require('../models/dispute.model');
 const ApiError = require('../utils/ApiError');
 const transaction = require('../utils/withTransaction');
 const audit = require('./adminAudit.service');
 const env = require('../config/env');
 const windowQuery = status => status === 'failed' ? { $or: [{ status: 'FAILED' }, { status: 'PROCESSING', lockedAt: { $lte: new Date(Date.now() - 5 * 60000) } }] } : {};
 const list = async (kind, { page = 1, limit = 20, status } = {}, user) => {
-  const models = { outbox: Outbox, mail: Mail, orders: Order, disputes: Dispute };
+  const models = { outbox: Outbox, mail: Mail, orders: Order };
   const Model = models[kind]; if (!Model) throw new ApiError(404, 'Unknown operation queue');
   const now = new Date(); let query = windowQuery(status);
   if (kind === 'orders') query = { ...require('./deadline.service').awaiting, sellerShipBy: { $lte: now }, ...(user.role === 'SELLER' ? { sellerId: user._id } : {}) };
-  if (kind === 'disputes') query = { $or: [{ status: { $in: ['OPEN', 'UNDER_REVIEW'] }, reviewBy: { $lte: now } },
-    { status: 'RESOLVED_BUYER', 'returnFlow.status': 'AWAITING_SHIPMENT', 'returnFlow.shipBy': { $lte: now } }] };
   const projection = kind === 'outbox' ? 'type status attempts nextAttemptAt lockedAt processedAt createdAt' :
     kind === 'mail' ? 'status attempts nextAttemptAt lockedAt sentAt createdAt expiresAt lastError' : '';
   const [items, total] = await Promise.all([Model.find(query).select(projection).sort({ createdAt: 1, _id: 1 }).skip((page - 1) * limit).limit(limit), Model.countDocuments(query)]);

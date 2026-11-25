@@ -13,10 +13,8 @@ const Cursor = require('../src/models/workerCursor.model');
 const Category = require('../src/models/category.model');
 const Product = require('../src/models/product.model');
 const settlements = require('../src/services/settlementEligibility.service');
-const disputes = require('../src/services/dispute.service');
 const events = require('../src/services/notificationEvent.service');
 const products = require('../src/services/product.service');
-const { signAccessToken } = require('../src/utils/token');
 
 let mongo, buyer, seller, admin;
 beforeAll(async () => {
@@ -96,19 +94,17 @@ const createOrders = async (count, overrides = {}) => {
   );
   return docs;
 };
-const createDispute = async () => {
-  const [order] = await createOrders(1);
-  return Dispute.create({
-    orderId: order._id,
-    buyerId: buyer._id,
-    sellerId: seller._id,
-    reason: 'ITEM_NOT_AS_DESCRIBED',
-    description: 'Concurrent admin fixture',
-    status: 'UNDER_REVIEW',
-  });
-};
-
 describe('Payout scanning regression', () => {
+  it.each(['OPEN', 'UNDER_REVIEW', 'RESOLVED_BUYER'])('keeps historical %s cases from releasing a payout', async status => {
+    const [order] = await createOrders(1);
+    await Dispute.create({
+      orderId: order._id, buyerId: buyer._id, sellerId: seller._id,
+      reason: 'ITEM_NOT_AS_DESCRIBED', description: 'Historical case fixture', status,
+    });
+    expect((await settlements.evaluateEligibleOrders()).eligibleCount).toBe(0);
+    expect(await Payout.countDocuments()).toBe(0);
+  });
+
   it('reaches order 51 using persisted progress and never creates duplicate payouts', async () => {
     await createOrders(51);
     expect((await settlements.evaluateEligibleOrders()).eligibleCount).toBe(50);
@@ -164,97 +160,6 @@ describe('Payout scanning regression', () => {
     expect(await Payout.countDocuments()).toBe(0);
     expect(await Cursor.countDocuments()).toBe(0);
     expect((await settlements.evaluateEligibleOrders()).eligibleCount).toBe(1);
-  });
-});
-
-describe('Dispute decision regression', () => {
-  it('enforces admin access and returns HTTP 409 to a competing resolution request', async () => {
-    const dispute = await createDispute();
-    const endpoint = `/api/v1/admin/disputes/${dispute._id}/resolve`;
-    await request(app)
-      .patch(endpoint)
-      .set('Authorization', `Bearer ${signAccessToken(buyer)}`)
-      .send({ status: 'RESOLVED_BUYER', resolution: 'Unauthorized request' })
-      .expect(403);
-    const results = await Promise.all(
-      ['RESOLVED_BUYER', 'RESOLVED_SELLER'].map((status) =>
-        request(app)
-          .patch(endpoint)
-          .set('Authorization', `Bearer ${signAccessToken(admin)}`)
-          .send({ status, resolution: `Decision ${status}` }),
-      ),
-    );
-    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
-  });
-  it('does not reopen a resolved dispute when review and resolution overlap', async () => {
-    const dispute = await createDispute();
-    await Promise.allSettled([
-      disputes.reviewDispute(dispute._id, admin, 'Review from another tab'),
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_BUYER',
-        resolution: 'Final decision',
-      }),
-    ]);
-    const saved = await Dispute.findById(dispute._id);
-    expect(saved.status).toBe('RESOLVED_BUYER');
-    expect(saved.auditHistory.filter((entry) => entry.action === 'RESOLVE')).toHaveLength(1);
-  });
-  it('accepts one conflicting decision and returns conflict for the second admin', async () => {
-    const dispute = await createDispute();
-    const decisions = await Promise.allSettled([
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_BUYER',
-        resolution: 'Refund buyer',
-      }),
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_SELLER',
-        resolution: 'Release seller funds',
-      }),
-    ]);
-    expect(decisions.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    expect(decisions.find((result) => result.status === 'rejected').reason.statusCode).toBe(409);
-    const saved = await Dispute.findById(dispute._id);
-    expect(saved.auditHistory.filter((entry) => entry.action === 'RESOLVE')).toHaveLength(1);
-    expect(saved.resolution).toBe(
-      decisions.find((result) => result.status === 'fulfilled').value.resolution,
-    );
-    expect(
-      await Outbox.countDocuments({ eventKey: new RegExp(`^dispute:${dispute._id}:resolved:`) }),
-    ).toBe(2);
-    await expect(disputes.reviewDispute(dispute._id, admin, 'Stale review')).rejects.toMatchObject({
-      statusCode: 409,
-    });
-    expect((await Dispute.findById(dispute._id)).status).toBe(saved.status);
-  });
-  it('rolls back status, history and first notification if the second notification fails', async () => {
-    const dispute = await createDispute();
-    const original = events.enqueueNotificationEvent;
-    jest
-      .spyOn(events, 'enqueueNotificationEvent')
-      .mockImplementationOnce(original)
-      .mockRejectedValueOnce(new Error('Outbox unavailable'));
-    await expect(
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_BUYER',
-        resolution: 'Refund buyer',
-      }),
-    ).rejects.toThrow('Outbox unavailable');
-    const saved = await Dispute.findById(dispute._id);
-    expect(saved.status).toBe('UNDER_REVIEW');
-    expect(saved.auditHistory).toHaveLength(0);
-    expect(await Outbox.countDocuments()).toBe(0);
-    expect((await Order.findById(dispute.orderId)).settlementVersion).toBe(0);
-  });
-  it('keeps a buyer resolution ineligible even when evaluation runs concurrently', async () => {
-    const dispute = await createDispute();
-    await Promise.all([
-      disputes.resolveDispute(dispute._id, admin, {
-        status: 'RESOLVED_BUYER',
-        resolution: 'Buyer evidence accepted',
-      }),
-      settlements.evaluateEligibleOrders(),
-    ]);
-    expect(await Payout.countDocuments()).toBe(0);
   });
 });
 

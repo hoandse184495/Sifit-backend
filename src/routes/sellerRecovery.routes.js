@@ -27,7 +27,6 @@ for (const role of ['ADMIN', 'SELLER']) {
     res.set({ 'Content-Type': receipt.mime, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }).send(receipt.proof);
   }));
 }
-router.post('/admin/orders/:id/post-payout-dispute', authenticate, authorize('ADMIN'), validate(z.object({ params: idParams, body: reason })), send(async req => ({ dispute: await service.openLateCase(req.user, req.params.id, req.body) })));
 router.post('/admin/recoveries', authenticate, authorize('ADMIN'), validate(z.object({ body: reason.extend({ orderId: objectId }) })), send(async req => ({ recovery: await service.create(req.user, req.body.orderId, req.body.reason) })));
 router.post('/admin/recoveries/:id/receipts', authenticate, authorize('ADMIN'), multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 5 } }).single('proof'), validate(z.object({ params: idParams, body: z.object({ amount: z.coerce.number().int().positive().safe(), reference: z.string().trim().min(3).max(100), receivedAt: z.iso.datetime(), note: z.string().trim().min(10).max(1000), confirmed: z.literal('true').transform(() => true) }) })), send(async req => ({ recovery: await service.recordReceipt(req.user, req.params.id, req.body, req.file) })));
 module.exports = router;

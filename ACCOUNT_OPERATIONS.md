@@ -42,25 +42,21 @@ release; local tests mock transport and cannot verify provider delivery.
 
 ## Deadlines
 
-Defaults: SELLER_SHIP_DAYS=3 after payment, SHIP_REMINDER_HOURS=24 before deadline,
-DISPUTE_REVIEW_DAYS=3. Existing paid orders without a deadline are backfilled from
+Defaults: SELLER_SHIP_DAYS=3 after payment, SHIP_REMINDER_HOURS=24 before deadline. Existing paid orders without a deadline are backfilled from
 payment time, falling back to order creation time for legacy data. Reminders
 are generated once per order. Admin and seller can view overdue shipping orders.
-Overdue disputes/returns are escalated to admin, never automatically adjudicated.
 Paid orders are never automatically cancelled by this deadline worker.
 
 ## Recovery after payout
 
-An independent admin can accept a late complaint for a completed, paid-out order
-in Operations > Recovery. Resolve the dispute for the buyer and satisfy any
-required return first. Open a recovery case, contact the seller, and independently
+Operations > Recovery can process a completed, paid-out order with a historical decision approving a buyer refund and verification of any required return. Open a recovery case, contact the seller, and independently
 verify actual incoming bank transfers before recording amounts and private image
 proofs. The system records money; it does not initiate bank transfers or offset
 future seller payouts. Incoming bank references are unique across PayOS payments
 and recovery receipts.
 
 After collecting the full seller allocation, create the refund under Finance,
-using the exact order, dispute and remaining full buyer refund amount. Existing
+using the exact order and remaining full buyer refund amount. Existing
 refund approval, bank proof and completion controls remain required. Original
 PAID payouts remain unchanged and the recovery ledger funds the refund.
 This version supports one separately allocated order per paid payout and a full

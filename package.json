@@ -17,7 +17,6 @@
     "worker:process-payouts": "node src/workers/payoutProcessing.worker.js",
     "worker:reconcile-shipments": "node src/workers/shipmentReconciliation.worker.js",
     "worker:complete-deliveries": "node src/workers/deliveryCompletion.worker.js",
-    "worker:dispute-deadlines": "node src/workers/disputeDeadline.worker.js",
     "worker:notification-outbox": "node src/workers/notificationOutbox.worker.js",
     "migrate:roles": "node scripts/upgradeRoles.js",
     "migrate:remove-address-district": "node scripts/removeAddressDistrict.js",

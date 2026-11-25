@@ -516,9 +516,11 @@ describe('Recovery after seller payout', () => {
   const setup = async () => {
     const payout = await Payout.create({ sellerId: seller._id, orderIds: [orders[0]._id], amount: 90000, status: 'PAID', provider: 'manual', completedAt: new Date(Date.now() - 3600000), idempotencyKey: crypto.randomUUID() });
     await Commission.updateOne({ orderId: orders[0]._id }, { status: 'RECOGNIZED' });
-    const result = await call('post', `/admin/orders/${orders[0]._id}/post-payout-dispute`).send({ reason: 'Verified complaint received after the payout' }).expect(200);
-    const dispute = result.body.data.dispute;
-    await require('../src/services/dispute.service').resolveDispute(dispute._id, admin, { status: 'RESOLVED_BUYER', resolution: 'Full buyer refund after independent evidence review', expectedVersion: dispute.contentVersion });
+    const dispute = await Dispute.create({
+      orderId: orders[0]._id, buyerId: buyer._id, sellerId: seller._id, reason: 'OTHER',
+      description: 'Historical post-payout case', status: 'RESOLVED_BUYER',
+      resolution: 'Full buyer refund approved before retirement',
+    });
     const recovery = (await call('post', '/admin/recoveries').send({ orderId: orders[0].id, reason: 'Recover seller proceeds before refunding buyer' }).expect(200)).body.data.recovery;
     return { payout, dispute, recovery };
   };
@@ -557,9 +559,8 @@ describe('Recovery after seller payout', () => {
     expect(JSON.stringify(detail.body)).not.toContain(png.toString('base64'));
   });
   it('blocks self-interested admins and requires a decided dispute before recovery', async () => {
-    await call('post', `/admin/orders/${orders[0]._id}/post-payout-dispute`, buyer).send({ reason: 'A buyer cannot bypass the protected dispute policy' }).expect(403);
     await call('post', '/admin/recoveries').send({ orderId: orders[0].id, reason: 'No paid payout or dispute yet' }).expect(409);
     await Order.updateOne({ _id: orders[0]._id }, { sellerId: admin._id });
-    await call('post', `/admin/orders/${orders[0]._id}/post-payout-dispute`).send({ reason: 'Self-interested administrator cannot open a case' }).expect(403);
+    await call('post', '/admin/recoveries').send({ orderId: orders[0].id, reason: 'Self-interested administrator cannot open recovery' }).expect(403);
   });
 });

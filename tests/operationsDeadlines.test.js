@@ -28,12 +28,12 @@ it('reminds and escalates once without cancelling a paid order and processes lat
   const second = order.toObject(); delete second._id; delete second.__v; await Order.create(second);
   await deadline.run({ limit: 1 }); expect(await Outbox.countDocuments()).toBe(6);
 });
-it('does not remind shipped orders, but escalates review/return deadlines without resolving a case', async () => {
+it('ignores shipped orders and leaves historical dispute records untouched', async () => {
   await Order.updateOne({ _id: order._id }, { orderStatus: 'SHIPPED' });
   const dispute = await Dispute.create({ orderId: order._id, buyerId: buyer._id, sellerId: seller._id, reason: 'OTHER', description: 'Review expired', reviewBy: new Date(Date.now() - 1000) });
-  await deadline.run(); expect(await Outbox.countDocuments()).toBe(1);
+  await deadline.run(); expect(await Outbox.countDocuments()).toBe(0);
   expect((await Dispute.findById(dispute._id)).status).toBe('OPEN');
-  await deadline.run(); expect(await Outbox.countDocuments()).toBe(1);
+  await deadline.run(); expect(await Outbox.countDocuments()).toBe(0);
 });
 it('restricts operations to admin and overdue orders to their own seller', async () => {
   const auth = user => ({ Authorization: `Bearer ${signAccessToken(user)}` });
